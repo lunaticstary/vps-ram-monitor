@@ -5,6 +5,59 @@ body {
   background: #0f1117;
   color: #e6e8ee;
 }
+
+/* ---- Live CPU/RAM usage bar (transparent, color-coded) ---- */
+.live-usage-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  gap: 10px;
+  padding: 8px 16px;
+  background: rgba(15, 17, 23, 0.55);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.live-usage-bar.hidden { display: none; }
+
+.live-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #9aa0ac;
+  transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+.live-pill .label { opacity: 0.8; font-weight: 500; }
+.live-pill .value { font-variant-numeric: tabular-nums; }
+.dot-mini { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+.live-pill.usage-green {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.4);
+  color: #4ade80;
+}
+.live-pill.usage-yellow {
+  background: rgba(234, 179, 8, 0.15);
+  border-color: rgba(234, 179, 8, 0.4);
+  color: #facc15;
+}
+.live-pill.usage-red {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #f87171;
+  animation: pulseGlow 1s infinite;
+}
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 rgba(239, 68, 68, 0); }
+  50% { box-shadow: 0 0 8px rgba(239, 68, 68, 0.5); }
+}
+
 .app { padding: 20px 24px 40px; }
 h1 { margin: 0 0 2px; font-size: 20px; }
 .subtitle { color: #9aa0ac; font-size: 12px; margin: 0 0 16px; }
@@ -75,3 +128,17 @@ button:hover { filter: brightness(1.1); }
   white-space: pre-wrap;
 }
 .hint { font-size: 11px; color: #6b7280; margin: 8px 0 0; }
+
+/* ---- Compact / narrower layout ---- */
+body.compact .app { padding: 12px 12px 24px; }
+body.compact h1 { font-size: 16px; }
+body.compact .subtitle,
+body.compact .hint { display: none; }
+body.compact .card { padding: 10px 12px; margin-bottom: 10px; }
+body.compact h2 { font-size: 12px; margin-bottom: 6px; }
+body.compact label { margin: 6px 0 3px; font-size: 10px; }
+body.compact input, body.compact select, body.compact textarea { padding: 6px 8px; font-size: 12px; }
+body.compact button { padding: 7px 10px; font-size: 12px; margin-top: 6px; margin-right: 6px; }
+body.compact .live-usage-bar { padding: 6px 10px; }
+body.compact .live-pill { padding: 3px 9px; font-size: 11px; }
+body.compact .log { height: 90px; }

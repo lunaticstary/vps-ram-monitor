@@ -6,6 +6,19 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <div id="liveUsageBar" class="live-usage-bar">
+    <div id="cpuPill" class="live-pill">
+      <span class="dot-mini"></span>
+      <span class="label">CPU</span>
+      <span id="cpuValue" class="value">--%</span>
+    </div>
+    <div id="ramPill" class="live-pill">
+      <span class="dot-mini"></span>
+      <span class="label">RAM</span>
+      <span id="ramValue" class="value">--%</span>
+    </div>
+  </div>
+
   <div class="app">
     <h1>🖥️ VPS RAM Monitor</h1>
     <p class="subtitle">SSH into your VPS, watch RAM usage, get warned before it OOMs.</p>
@@ -66,6 +79,18 @@
       </label>
       <button id="saveBtn">Save Settings</button>
       <button id="testAlertBtn" class="warn">🔔 Test Alert Overlay</button>
+    </div>
+
+    <div class="card">
+      <h2>Display</h2>
+      <label class="checkbox">
+        <input id="showLiveUsageBar" type="checkbox" />
+        Show live CPU/RAM usage bar at top (green/yellow/red)
+      </label>
+      <label class="checkbox">
+        <input id="compactLayout" type="checkbox" />
+        Compact / narrower layout
+      </label>
     </div>
 
     <div class="card">

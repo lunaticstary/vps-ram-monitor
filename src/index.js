@@ -11,6 +11,8 @@ const els = {
   thresholdPercent: document.getElementById('thresholdPercent'),
   pollIntervalSec: document.getElementById('pollIntervalSec'),
   launchOnStartup: document.getElementById('launchOnStartup'),
+  showLiveUsageBar: document.getElementById('showLiveUsageBar'),
+  compactLayout: document.getElementById('compactLayout'),
   saveBtn: document.getElementById('saveBtn'),
   testAlertBtn: document.getElementById('testAlertBtn'),
   testConnBtn: document.getElementById('testConnBtn'),
@@ -21,7 +23,34 @@ const els = {
   statusText: document.getElementById('statusText'),
   ramInfo: document.getElementById('ramInfo'),
   log: document.getElementById('log'),
+  liveUsageBar: document.getElementById('liveUsageBar'),
+  cpuPill: document.getElementById('cpuPill'),
+  ramPill: document.getElementById('ramPill'),
+  cpuValue: document.getElementById('cpuValue'),
+  ramValue: document.getElementById('ramValue'),
 };
+
+// Usage color thresholds for the live bar (independent of the RAM alert threshold)
+const USAGE_YELLOW_AT = 60;
+const USAGE_RED_AT = 85;
+
+function usageColorClass(percent) {
+  if (percent == null || Number.isNaN(percent)) return null;
+  if (percent >= USAGE_RED_AT) return 'usage-red';
+  if (percent >= USAGE_YELLOW_AT) return 'usage-yellow';
+  return 'usage-green';
+}
+
+function setPill(pillEl, valueEl, percent) {
+  pillEl.classList.remove('usage-green', 'usage-yellow', 'usage-red');
+  if (percent == null || Number.isNaN(percent)) {
+    valueEl.textContent = '--%';
+    return;
+  }
+  valueEl.textContent = `${percent}%`;
+  const cls = usageColorClass(percent);
+  if (cls) pillEl.classList.add(cls);
+}
 
 function collectFormSettings() {
   return {
@@ -35,6 +64,8 @@ function collectFormSettings() {
     thresholdPercent: Number(els.thresholdPercent.value) || 99,
     pollIntervalSec: Number(els.pollIntervalSec.value) || 15,
     launchOnStartup: els.launchOnStartup.checked,
+    showLiveUsageBar: els.showLiveUsageBar.checked,
+    compactLayout: els.compactLayout.checked,
   };
 }
 
@@ -49,7 +80,10 @@ function applySettingsToForm(s) {
   els.thresholdPercent.value = s.thresholdPercent || 99;
   els.pollIntervalSec.value = s.pollIntervalSec || 15;
   els.launchOnStartup.checked = !!s.launchOnStartup;
+  els.showLiveUsageBar.checked = s.showLiveUsageBar !== false;
+  els.compactLayout.checked = !!s.compactLayout;
   toggleAuthFields();
+  applyDisplayPrefs();
 }
 
 function toggleAuthFields() {
@@ -58,11 +92,19 @@ function toggleAuthFields() {
   els.passwordField.classList.toggle('hidden', isKey);
 }
 
+function applyDisplayPrefs() {
+  els.liveUsageBar.classList.toggle('hidden', !els.showLiveUsageBar.checked);
+  document.body.classList.toggle('compact', els.compactLayout.checked);
+}
+
 els.authType.addEventListener('change', toggleAuthFields);
+els.showLiveUsageBar.addEventListener('change', applyDisplayPrefs);
+els.compactLayout.addEventListener('change', applyDisplayPrefs);
 
 els.saveBtn.addEventListener('click', async () => {
   const settings = collectFormSettings();
   await window.api.saveSettings(settings);
+  applyDisplayPrefs();
 });
 
 els.testConnBtn.addEventListener('click', async () => {
@@ -106,10 +148,14 @@ window.api.onStatusUpdate((status) => {
   }
   if (typeof status.usedPercent === 'number') {
     els.ramInfo.textContent = `RAM: ${status.usedPercent}% used (${status.usedMB}MB / ${status.totalMB}MB)`;
+    setPill(els.ramPill, els.ramValue, status.usedPercent);
     if (status.usedPercent >= Number(els.thresholdPercent.value)) {
       els.statusDot.className = 'dot dot-alert';
       els.statusText.textContent = 'HIGH RAM USAGE!';
     }
+  }
+  if (typeof status.cpuPercent === 'number') {
+    setPill(els.cpuPill, els.cpuValue, status.cpuPercent);
   }
 });
 

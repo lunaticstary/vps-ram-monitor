@@ -1,7 +1,7 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
-const { fetchRamUsage, testConnection } = require('./ssh-monitor');
+const { fetchSystemUsage, testConnection } = require('./ssh-monitor');
 
 const store = new Store({
   name: 'vps-ram-monitor-config',
@@ -16,8 +16,13 @@ const store = new Store({
     pollIntervalSec: 15,
     thresholdPercent: 99,
     launchOnStartup: false,
+    showLiveUsageBar: true,
+    compactLayout: false,
   },
 });
+
+const NORMAL_WIDTH = 480;
+const COMPACT_WIDTH = 340;
 
 let mainWindow = null;
 let overlayWindow = null;
@@ -28,9 +33,10 @@ let snoozeUntil = 0;
 let alertActive = false;
 
 function createMainWindow() {
+  const compact = store.get('compactLayout');
   mainWindow = new BrowserWindow({
-    width: 480,
-    height: 720,
+    width: compact ? COMPACT_WIDTH : NORMAL_WIDTH,
+    height: 760,
     resizable: false,
     icon: path.join(__dirname, '..', 'assets', 'icon.png'),
     webPreferences: {
@@ -170,12 +176,19 @@ async function pollOnce() {
     return;
   }
   try {
-    const usage = await fetchRamUsage(config);
-    sendLog(`RAM usage on ${config.host}: ${usage.usedPercent}% (${usage.usedMB}MB / ${usage.totalMB}MB)`);
-    sendStatus({ connected: true, ...usage });
+    const usage = await fetchSystemUsage(config);
+    const cpuLabel = usage.cpuPercent != null ? `${usage.cpuPercent}%` : 'n/a';
+    sendLog(`${config.host} — RAM: ${usage.ramPercent}% (${usage.ramUsedMB}MB / ${usage.ramTotalMB}MB), CPU: ${cpuLabel}`);
+    sendStatus({
+      connected: true,
+      usedPercent: usage.ramPercent,
+      usedMB: usage.ramUsedMB,
+      totalMB: usage.ramTotalMB,
+      cpuPercent: usage.cpuPercent,
+    });
 
-    if (usage.usedPercent >= Number(config.thresholdPercent)) {
-      showOverlay({ usedPercent: usage.usedPercent, host: config.host, test: false });
+    if (usage.ramPercent >= Number(config.thresholdPercent)) {
+      showOverlay({ usedPercent: usage.ramPercent, host: config.host, test: false });
     } else if (alertActive) {
       hideOverlay();
     }
@@ -209,8 +222,17 @@ function stopMonitoring() {
 ipcMain.handle('get-settings', () => store.store);
 
 ipcMain.handle('save-settings', (_e, settings) => {
+  const prevCompact = store.get('compactLayout');
   Object.keys(settings).forEach((key) => store.set(key, settings[key]));
   app.setLoginItemSettings({ openAtLogin: !!settings.launchOnStartup });
+
+  if (typeof settings.compactLayout === 'boolean' && settings.compactLayout !== prevCompact) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      const [, height] = mainWindow.getSize();
+      mainWindow.setSize(settings.compactLayout ? COMPACT_WIDTH : NORMAL_WIDTH, height);
+    }
+  }
+
   sendLog('Settings saved.');
   return store.store;
 });
@@ -239,9 +261,8 @@ ipcMain.handle('trigger-test-alert', () => {
   return { ok: true };
 });
 
-const { ipcMain: ipc } = require('electron');
-ipc.on('overlay-dismiss', () => hideOverlay());
-ipc.on('overlay-snooze', (_e, minutes) => {
+ipcMain.on('overlay-dismiss', () => hideOverlay());
+ipcMain.on('overlay-snooze', (_e, minutes) => {
   snoozeUntil = Date.now() + Math.max(1, Number(minutes) || 10) * 60 * 1000;
   sendLog(`Alerts snoozed for ${minutes} minute(s).`);
   hideOverlay();
@@ -257,9 +278,8 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('window-all-closed', (e) => {
+app.on('window-all-closed', () => {
   // Keep running in background (tray) instead of quitting.
-  e.preventDefault ? null : null;
 });
 
 app.on('before-quit', () => {
