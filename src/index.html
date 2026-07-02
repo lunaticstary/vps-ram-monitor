@@ -21,7 +21,7 @@
 
   <div class="app">
     <h1>🖥️ VPS RAM Monitor</h1>
-    <p class="subtitle">SSH into your VPS, watch RAM usage, get warned before it OOMs.</p>
+    <p class="subtitle">SSH into your VPS and watch live CPU/RAM on a real desktop overlay.</p>
 
     <div class="card">
       <h2>Connection</h2>
@@ -62,35 +62,35 @@
     </div>
 
     <div class="card">
-      <h2>Alert Settings</h2>
-      <div class="row">
-        <div>
-          <label>RAM Threshold (%)</label>
-          <input id="thresholdPercent" type="number" value="99" min="50" max="100" />
-        </div>
-        <div>
-          <label>Check Every (seconds)</label>
-          <input id="pollIntervalSec" type="number" value="15" min="5" />
-        </div>
-      </div>
+      <h2>Monitoring Settings</h2>
+      <label>Check Every (seconds)</label>
+      <input id="pollIntervalSec" type="number" value="15" min="5" />
       <label class="checkbox">
         <input id="launchOnStartup" type="checkbox" />
         Launch app on system startup
       </label>
       <button id="saveBtn">Save Settings</button>
-      <button id="testAlertBtn" class="warn">🔔 Test Alert Overlay</button>
+      <button id="testAlertBtn" class="warn">🧪 Preview High Usage (color only)</button>
     </div>
 
     <div class="card">
       <h2>Display</h2>
       <label class="checkbox">
+        <input id="showDesktopOverlay" type="checkbox" />
+        Show desktop overlay (always-on-top widget, works over games)
+      </label>
+      <label class="checkbox">
         <input id="showLiveUsageBar" type="checkbox" />
-        Show live CPU/RAM usage bar at top (green/yellow/red)
+        Also show live bar inside this dashboard window
       </label>
       <label class="checkbox">
         <input id="compactLayout" type="checkbox" />
-        Compact / narrower layout
+        Narrow Mode — makes the overlay (and this window) more compact
       </label>
+      <p class="hint">
+        The overlay only ever changes color (green/yellow/red) based on usage — it never shows
+        warning text, popups, or sounds.
+      </p>
     </div>
 
     <div class="card">

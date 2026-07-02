@@ -14,23 +14,25 @@ const store = new Store({
     privateKey: '',
     passphrase: '',
     pollIntervalSec: 15,
-    thresholdPercent: 99,
     launchOnStartup: false,
-    showLiveUsageBar: true,
-    compactLayout: false,
+    showLiveUsageBar: true, // in-app bar inside the dashboard window
+    showDesktopOverlay: true, // real always-on-top desktop overlay widget
+    compactLayout: false, // "Narrow Mode" - only affects sizing, never alerts
   },
 });
 
 const NORMAL_WIDTH = 480;
 const COMPACT_WIDTH = 340;
 
+const OVERLAY_SIZE_NORMAL = { width: 210, height: 64 };
+const OVERLAY_SIZE_COMPACT = { width: 140, height: 46 };
+const OVERLAY_MARGIN = 16;
+
 let mainWindow = null;
-let overlayWindow = null;
+let statsOverlayWindow = null;
 let tray = null;
 let monitorTimer = null;
 let isMonitoring = false;
-let snoozeUntil = 0;
-let alertActive = false;
 
 function createMainWindow() {
   const compact = store.get('compactLayout');
@@ -54,6 +56,95 @@ function createMainWindow() {
       mainWindow.hide();
     }
   });
+}
+
+function overlaySize() {
+  return store.get('compactLayout') ? OVERLAY_SIZE_COMPACT : OVERLAY_SIZE_NORMAL;
+}
+
+function overlayPosition(size) {
+  const { x, y, width } = screen.getPrimaryDisplay().workArea;
+  return {
+    x: x + width - size.width - OVERLAY_MARGIN,
+    y: y + OVERLAY_MARGIN,
+  };
+}
+
+function createStatsOverlayWindow() {
+  const size = overlaySize();
+  const pos = overlayPosition(size);
+
+  statsOverlayWindow = new BrowserWindow({
+    width: size.width,
+    height: size.height,
+    x: pos.x,
+    y: pos.y,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    movable: false,
+    skipTaskbar: true,
+    focusable: false,
+    hasShadow: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  // 'screen-saver' level + visibleOnFullScreen keeps it above full-screen apps/games on macOS.
+  statsOverlayWindow.setAlwaysOnTop(true, 'screen-saver');
+  statsOverlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  statsOverlayWindow.loadFile(path.join(__dirname, 'stats-overlay.html'));
+
+  // Purely a readout - let clicks/input pass straight through to whatever is underneath (e.g. a game).
+  statsOverlayWindow.once('ready-to-show', () => {
+    if (statsOverlayWindow) statsOverlayWindow.setIgnoreMouseEvents(true, { forward: true });
+  });
+
+  statsOverlayWindow.on('closed', () => {
+    statsOverlayWindow = null;
+  });
+}
+
+function ensureStatsOverlayWindow() {
+  if (!statsOverlayWindow || statsOverlayWindow.isDestroyed()) {
+    createStatsOverlayWindow();
+  }
+}
+
+function repositionStatsOverlay() {
+  if (!statsOverlayWindow || statsOverlayWindow.isDestroyed()) return;
+  const size = overlaySize();
+  const pos = overlayPosition(size);
+  statsOverlayWindow.setBounds({ x: pos.x, y: pos.y, width: size.width, height: size.height });
+}
+
+function showStatsOverlay() {
+  if (!store.get('showDesktopOverlay')) return;
+  ensureStatsOverlayWindow();
+  repositionStatsOverlay();
+  statsOverlayWindow.showInactive();
+}
+
+function hideStatsOverlay() {
+  if (statsOverlayWindow && !statsOverlayWindow.isDestroyed()) {
+    statsOverlayWindow.hide();
+  }
+}
+
+function updateStatsOverlay(data) {
+  if (!statsOverlayWindow || statsOverlayWindow.isDestroyed()) return;
+  const payload = { ...data, compact: store.get('compactLayout') };
+  const send = () => statsOverlayWindow.webContents.send('stats-overlay-data', payload);
+  if (statsOverlayWindow.webContents.isLoading()) {
+    statsOverlayWindow.webContents.once('did-finish-load', send);
+  } else {
+    send();
+  }
 }
 
 function createTray() {
@@ -83,7 +174,15 @@ function refreshTrayMenu() {
       label: isMonitoring ? 'Stop Monitoring' : 'Start Monitoring',
       click: () => (isMonitoring ? stopMonitoring() : startMonitoring()),
     },
-    { label: 'Send Test Alert', click: () => showOverlay({ test: true, usedPercent: 99.4, host: store.get('host') || 'test-vps' }) },
+    {
+      label: store.get('showDesktopOverlay') ? 'Hide Desktop Overlay' : 'Show Desktop Overlay',
+      click: () => {
+        store.set('showDesktopOverlay', !store.get('showDesktopOverlay'));
+        if (store.get('showDesktopOverlay') && isMonitoring) showStatsOverlay();
+        else hideStatsOverlay();
+        refreshTrayMenu();
+      },
+    },
     { type: 'separator' },
     {
       label: 'Quit',
@@ -109,66 +208,6 @@ function sendStatus(status) {
   }
 }
 
-function createOverlayWindow() {
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const { width } = primaryDisplay.workAreaSize;
-
-  overlayWindow = new BrowserWindow({
-    width,
-    height: 130,
-    x: 0,
-    y: 0,
-    frame: false,
-    transparent: true,
-    alwaysOnTop: true,
-    resizable: false,
-    movable: false,
-    skipTaskbar: true,
-    focusable: true,
-    show: false,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  });
-
-  overlayWindow.setAlwaysOnTop(true, 'screen-saver');
-  overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  overlayWindow.loadFile(path.join(__dirname, 'overlay.html'));
-
-  overlayWindow.on('closed', () => {
-    overlayWindow = null;
-  });
-}
-
-function showOverlay(data) {
-  const now = Date.now();
-  if (now < snoozeUntil) {
-    sendLog('Alert suppressed (snoozed)');
-    return;
-  }
-  if (!overlayWindow || overlayWindow.isDestroyed()) {
-    createOverlayWindow();
-  }
-  alertActive = true;
-  const send = () => overlayWindow.webContents.send('overlay-data', data);
-  if (overlayWindow.webContents.isLoading()) {
-    overlayWindow.webContents.once('did-finish-load', send);
-  } else {
-    send();
-  }
-  overlayWindow.showInactive();
-  overlayWindow.focus();
-}
-
-function hideOverlay() {
-  alertActive = false;
-  if (overlayWindow && !overlayWindow.isDestroyed()) {
-    overlayWindow.hide();
-  }
-}
-
 async function pollOnce() {
   const config = store.store;
   if (!config.host || !config.username) {
@@ -186,12 +225,8 @@ async function pollOnce() {
       totalMB: usage.ramTotalMB,
       cpuPercent: usage.cpuPercent,
     });
-
-    if (usage.ramPercent >= Number(config.thresholdPercent)) {
-      showOverlay({ usedPercent: usage.ramPercent, host: config.host, test: false });
-    } else if (alertActive) {
-      hideOverlay();
-    }
+    // Overlay only ever reflects live numbers + color. No thresholds, no popups, no sounds.
+    updateStatsOverlay({ cpuPercent: usage.cpuPercent, ramPercent: usage.ramPercent });
   } catch (err) {
     sendLog(`ERROR: ${err.message}`);
     sendStatus({ connected: false, error: err.message });
@@ -202,7 +237,8 @@ function startMonitoring() {
   if (isMonitoring) return;
   isMonitoring = true;
   const intervalMs = Math.max(5, Number(store.get('pollIntervalSec')) || 15) * 1000;
-  sendLog(`Monitoring started (every ${intervalMs / 1000}s, threshold ${store.get('thresholdPercent')}%).`);
+  sendLog(`Monitoring started (every ${intervalMs / 1000}s).`);
+  showStatsOverlay();
   pollOnce();
   monitorTimer = setInterval(pollOnce, intervalMs);
   refreshTrayMenu();
@@ -213,6 +249,7 @@ function stopMonitoring() {
   isMonitoring = false;
   if (monitorTimer) clearInterval(monitorTimer);
   monitorTimer = null;
+  hideStatsOverlay();
   sendLog('Monitoring stopped.');
   refreshTrayMenu();
   sendStatus({ monitoring: false });
@@ -223,6 +260,7 @@ ipcMain.handle('get-settings', () => store.store);
 
 ipcMain.handle('save-settings', (_e, settings) => {
   const prevCompact = store.get('compactLayout');
+  const prevShowOverlay = store.get('showDesktopOverlay');
   Object.keys(settings).forEach((key) => store.set(key, settings[key]));
   app.setLoginItemSettings({ openAtLogin: !!settings.launchOnStartup });
 
@@ -231,6 +269,12 @@ ipcMain.handle('save-settings', (_e, settings) => {
       const [, height] = mainWindow.getSize();
       mainWindow.setSize(settings.compactLayout ? COMPACT_WIDTH : NORMAL_WIDTH, height);
     }
+    repositionStatsOverlay();
+  }
+
+  if (typeof settings.showDesktopOverlay === 'boolean' && settings.showDesktopOverlay !== prevShowOverlay) {
+    if (settings.showDesktopOverlay && isMonitoring) showStatsOverlay();
+    if (!settings.showDesktopOverlay) hideStatsOverlay();
   }
 
   sendLog('Settings saved.');
@@ -256,16 +300,20 @@ ipcMain.handle('stop-monitoring', () => {
   return { monitoring: false };
 });
 
-ipcMain.handle('trigger-test-alert', () => {
-  showOverlay({ test: true, usedPercent: 99.4, host: store.get('host') || 'test-vps' });
+// Lets the user see what the overlay looks like at high usage - color only, briefly,
+// then automatically reverts to real numbers. No banner, no text, no sound.
+ipcMain.handle('preview-high-usage', () => {
+  const wasVisible = !!(statsOverlayWindow && !statsOverlayWindow.isDestroyed() && statsOverlayWindow.isVisible());
+  showStatsOverlay();
+  updateStatsOverlay({ cpuPercent: 97, ramPercent: 99 });
+  setTimeout(() => {
+    if (isMonitoring) {
+      pollOnce();
+    } else if (!wasVisible) {
+      hideStatsOverlay();
+    }
+  }, 5000);
   return { ok: true };
-});
-
-ipcMain.on('overlay-dismiss', () => hideOverlay());
-ipcMain.on('overlay-snooze', (_e, minutes) => {
-  snoozeUntil = Date.now() + Math.max(1, Number(minutes) || 10) * 60 * 1000;
-  sendLog(`Alerts snoozed for ${minutes} minute(s).`);
-  hideOverlay();
 });
 
 app.whenReady().then(() => {

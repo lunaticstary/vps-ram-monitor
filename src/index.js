@@ -8,10 +8,10 @@ const els = {
   passphrase: document.getElementById('passphrase'),
   passwordField: document.getElementById('passwordField'),
   keyField: document.getElementById('keyField'),
-  thresholdPercent: document.getElementById('thresholdPercent'),
   pollIntervalSec: document.getElementById('pollIntervalSec'),
   launchOnStartup: document.getElementById('launchOnStartup'),
   showLiveUsageBar: document.getElementById('showLiveUsageBar'),
+  showDesktopOverlay: document.getElementById('showDesktopOverlay'),
   compactLayout: document.getElementById('compactLayout'),
   saveBtn: document.getElementById('saveBtn'),
   testAlertBtn: document.getElementById('testAlertBtn'),
@@ -30,15 +30,15 @@ const els = {
   ramValue: document.getElementById('ramValue'),
 };
 
-// Usage color thresholds for the live bar (independent of the RAM alert threshold)
+// Usage color thresholds - shared conceptually with the desktop overlay widget.
 const USAGE_YELLOW_AT = 60;
 const USAGE_RED_AT = 85;
 
 function usageColorClass(percent) {
   if (percent == null || Number.isNaN(percent)) return null;
-  if (percent >= USAGE_RED_AT) return 'usage-red';
-  if (percent >= USAGE_YELLOW_AT) return 'usage-yellow';
-  return 'usage-green';
+  if (percent >= USAGE_RED_AT) return 'red';
+  if (percent >= USAGE_YELLOW_AT) return 'yellow';
+  return 'green';
 }
 
 function setPill(pillEl, valueEl, percent) {
@@ -49,7 +49,12 @@ function setPill(pillEl, valueEl, percent) {
   }
   valueEl.textContent = `${percent}%`;
   const cls = usageColorClass(percent);
-  if (cls) pillEl.classList.add(cls);
+  if (cls) pillEl.classList.add(`usage-${cls}`);
+}
+
+function setStatusDotColor(percent) {
+  const cls = usageColorClass(percent);
+  els.statusDot.className = `dot dot-${cls || 'on'}`;
 }
 
 function collectFormSettings() {
@@ -61,10 +66,10 @@ function collectFormSettings() {
     password: els.password.value,
     privateKey: els.privateKey.value,
     passphrase: els.passphrase.value,
-    thresholdPercent: Number(els.thresholdPercent.value) || 99,
     pollIntervalSec: Number(els.pollIntervalSec.value) || 15,
     launchOnStartup: els.launchOnStartup.checked,
     showLiveUsageBar: els.showLiveUsageBar.checked,
+    showDesktopOverlay: els.showDesktopOverlay.checked,
     compactLayout: els.compactLayout.checked,
   };
 }
@@ -77,10 +82,10 @@ function applySettingsToForm(s) {
   els.password.value = s.password || '';
   els.privateKey.value = s.privateKey || '';
   els.passphrase.value = s.passphrase || '';
-  els.thresholdPercent.value = s.thresholdPercent || 99;
   els.pollIntervalSec.value = s.pollIntervalSec || 15;
   els.launchOnStartup.checked = !!s.launchOnStartup;
   els.showLiveUsageBar.checked = s.showLiveUsageBar !== false;
+  els.showDesktopOverlay.checked = s.showDesktopOverlay !== false;
   els.compactLayout.checked = !!s.compactLayout;
   toggleAuthFields();
   applyDisplayPrefs();
@@ -121,8 +126,9 @@ els.testConnBtn.addEventListener('click', async () => {
   }
 });
 
+// Only previews the overlay's color at a simulated high reading - no popup/sound involved.
 els.testAlertBtn.addEventListener('click', () => {
-  window.api.triggerTestAlert();
+  window.api.previewHighUsage();
 });
 
 els.startBtn.addEventListener('click', async () => {
@@ -143,16 +149,14 @@ window.api.onStatusUpdate((status) => {
     els.statusText.textContent = 'Not monitoring';
   }
   if (status.connected === false) {
-    els.statusDot.className = 'dot dot-alert';
+    els.statusDot.className = 'dot dot-off';
     els.statusText.textContent = 'Connection error';
   }
   if (typeof status.usedPercent === 'number') {
     els.ramInfo.textContent = `RAM: ${status.usedPercent}% used (${status.usedMB}MB / ${status.totalMB}MB)`;
     setPill(els.ramPill, els.ramValue, status.usedPercent);
-    if (status.usedPercent >= Number(els.thresholdPercent.value)) {
-      els.statusDot.className = 'dot dot-alert';
-      els.statusText.textContent = 'HIGH RAM USAGE!';
-    }
+    setStatusDotColor(status.usedPercent);
+    els.statusText.textContent = 'Monitoring...';
   }
   if (typeof status.cpuPercent === 'number') {
     setPill(els.cpuPill, els.cpuValue, status.cpuPercent);

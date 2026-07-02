@@ -6,13 +6,13 @@ contextBridge.exposeInMainWorld('api', {
   testConnection: (settings) => ipcRenderer.invoke('test-connection', settings),
   startMonitoring: () => ipcRenderer.invoke('start-monitoring'),
   stopMonitoring: () => ipcRenderer.invoke('stop-monitoring'),
-  triggerTestAlert: () => ipcRenderer.invoke('trigger-test-alert'),
+  previewHighUsage: () => ipcRenderer.invoke('preview-high-usage'),
   onStatusUpdate: (callback) => ipcRenderer.on('status-update', (_e, data) => callback(data)),
   onLog: (callback) => ipcRenderer.on('log-line', (_e, line) => callback(line)),
 });
 
-contextBridge.exposeInMainWorld('overlayApi', {
-  onAlert: (callback) => ipcRenderer.on('overlay-data', (_e, data) => callback(data)),
-  dismiss: () => ipcRenderer.send('overlay-dismiss'),
-  snooze: (minutes) => ipcRenderer.send('overlay-snooze', minutes),
+// Exposed to the small always-on-top desktop overlay window only.
+// It only ever receives numbers to display - no alert/warning payloads.
+contextBridge.exposeInMainWorld('statsOverlayApi', {
+  onData: (callback) => ipcRenderer.on('stats-overlay-data', (_e, data) => callback(data)),
 });
