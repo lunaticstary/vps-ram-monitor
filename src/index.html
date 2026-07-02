@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>VPS RAM Monitor</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <h1>🖥️ VPS RAM Monitor</h1>
+    <p class="subtitle">SSH into your VPS, watch RAM usage, get warned before it OOMs.</p>
+
+    <div class="card">
+      <h2>Connection</h2>
+      <label>Host / IP</label>
+      <input id="host" type="text" placeholder="1.2.3.4 or my-vps.com" />
+
+      <div class="row">
+        <div>
+          <label>Port</label>
+          <input id="port" type="number" value="22" />
+        </div>
+        <div>
+          <label>Username</label>
+          <input id="username" type="text" placeholder="root" />
+        </div>
+      </div>
+
+      <label>Auth method</label>
+      <select id="authType">
+        <option value="password">Password</option>
+        <option value="key">Private Key</option>
+      </select>
+
+      <div id="passwordField">
+        <label>Password</label>
+        <input id="password" type="password" placeholder="••••••••" />
+      </div>
+
+      <div id="keyField" class="hidden">
+        <label>Private Key (paste contents of ~/.ssh/id_rsa)</label>
+        <textarea id="privateKey" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+        <label>Passphrase (optional)</label>
+        <input id="passphrase" type="password" />
+      </div>
+
+      <button id="testConnBtn" class="secondary">Test SSH Connection</button>
+      <span id="testConnResult"></span>
+    </div>
+
+    <div class="card">
+      <h2>Alert Settings</h2>
+      <div class="row">
+        <div>
+          <label>RAM Threshold (%)</label>
+          <input id="thresholdPercent" type="number" value="99" min="50" max="100" />
+        </div>
+        <div>
+          <label>Check Every (seconds)</label>
+          <input id="pollIntervalSec" type="number" value="15" min="5" />
+        </div>
+      </div>
+      <label class="checkbox">
+        <input id="launchOnStartup" type="checkbox" />
+        Launch app on system startup
+      </label>
+      <button id="saveBtn">Save Settings</button>
+      <button id="testAlertBtn" class="warn">🔔 Test Alert Overlay</button>
+    </div>
+
+    <div class="card">
+      <h2>Monitoring</h2>
+      <div class="status-row">
+        <span id="statusDot" class="dot dot-off"></span>
+        <span id="statusText">Not monitoring</span>
+      </div>
+      <div id="ramInfo" class="ram-info"></div>
+      <button id="startBtn">▶ Start Monitoring</button>
+      <button id="stopBtn" class="secondary">■ Stop</button>
+      <p class="hint">The app keeps running in the background (system tray) even if you close this window.</p>
+    </div>
+
+    <div class="card">
+      <h2>Log</h2>
+      <div id="log" class="log"></div>
+    </div>
+  </div>
+
+  <script src="index.js"></script>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>RAM Alert</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-app-region: no-drag;
+    }
+    .bar {
+      width: 100%;
+      height: 130px;
+      background: linear-gradient(90deg, #b91c1c, #ef4444, #b91c1c);
+      background-size: 200% 100%;
+      animation: flash 1.1s linear infinite;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 30px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+      color: white;
+    }
+    @keyframes flash {
+      0% { background-position: 0% 0%; }
+      100% { background-position: 200% 0%; }
+    }
+    .left { display: flex; align-items: center; gap: 18px; }
+    .icon { font-size: 44px; animation: shake 0.4s infinite; }
+    @keyframes shake {
+      0%, 100% { transform: rotate(0deg); }
+      25% { transform: rotate(-8deg); }
+      75% { transform: rotate(8deg); }
+    }
+    .text h1 { margin: 0; font-size: 20px; letter-spacing: 0.5px; }
+    .text p { margin: 2px 0 0; font-size: 13px; opacity: 0.9; }
+    .actions { display: flex; gap: 10px; }
+    button {
+      border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .dismiss { background: rgba(255,255,255,0.9); color: #b91c1c; }
+    .snooze { background: rgba(0,0,0,0.3); color: white; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <div class="left">
+      <div class="icon">⚠️</div>
+      <div class="text">
+        <h1 id="title">WARNING: VPS RAM USAGE HIGH</h1>
+        <p id="subtitle">Loading...</p>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="snooze" id="snoozeBtn">Snooze 10m</button>
+      <button class="dismiss" id="dismissBtn">Dismiss</button>
+    </div>
+  </div>
+  <script src="overlay.js"></script>
+</body>
+</html>
