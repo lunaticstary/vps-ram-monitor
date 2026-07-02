@@ -18,6 +18,7 @@ const store = new Store({
     showLiveUsageBar: true, // in-app bar inside the dashboard window
     showDesktopOverlay: true, // real always-on-top desktop overlay widget
     compactLayout: false, // "Narrow Mode" - only affects sizing, never alerts
+    soundAlertsEnabled: true, // beeps + spoken warning when usage is high
   },
 });
 
@@ -28,17 +29,23 @@ const OVERLAY_SIZE_NORMAL = { width: 210, height: 64 };
 const OVERLAY_SIZE_COMPACT = { width: 140, height: 46 };
 const OVERLAY_MARGIN = 16;
 
+// Same red cutoff the overlay/dashboard use for coloring - used here only to decide
+// whether to fire the (optional) sound alert, not to show any text/popup.
+const USAGE_RED_AT = 85;
+const SOUND_ALERT_COOLDOWN_MS = 20000;
+
 let mainWindow = null;
 let statsOverlayWindow = null;
 let tray = null;
 let monitorTimer = null;
 let isMonitoring = false;
+let lastSoundAlertAt = 0;
 
 function createMainWindow() {
   const compact = store.get('compactLayout');
   mainWindow = new BrowserWindow({
     width: compact ? COMPACT_WIDTH : NORMAL_WIDTH,
-    height: 760,
+    height: 780,
     resizable: false,
     icon: path.join(__dirname, '..', 'assets', 'icon.png'),
     webPreferences: {
@@ -147,6 +154,14 @@ function updateStatsOverlay(data) {
   }
 }
 
+// Beeping + speech happen in the dashboard renderer (index.js) since that window's
+// webContents stay alive in the background even when the window is hidden.
+function sendSoundAlert(data) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('sound-alert', data);
+  }
+}
+
 function createTray() {
   const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
   let image = nativeImage.createFromPath(iconPath);
@@ -180,6 +195,13 @@ function refreshTrayMenu() {
         store.set('showDesktopOverlay', !store.get('showDesktopOverlay'));
         if (store.get('showDesktopOverlay') && isMonitoring) showStatsOverlay();
         else hideStatsOverlay();
+        refreshTrayMenu();
+      },
+    },
+    {
+      label: store.get('soundAlertsEnabled') ? 'Disable Sound & Voice Alerts' : 'Enable Sound & Voice Alerts',
+      click: () => {
+        store.set('soundAlertsEnabled', !store.get('soundAlertsEnabled'));
         refreshTrayMenu();
       },
     },
@@ -225,8 +247,22 @@ async function pollOnce() {
       totalMB: usage.ramTotalMB,
       cpuPercent: usage.cpuPercent,
     });
-    // Overlay only ever reflects live numbers + color. No thresholds, no popups, no sounds.
+    // Overlay visuals only ever reflect live numbers + color. No banner/popup text, ever.
     updateStatsOverlay({ cpuPercent: usage.cpuPercent, ramPercent: usage.ramPercent });
+
+    // Optional audible alert (beeps + spoken warning) - separate from the overlay's color,
+    // gated behind its own toggle so it never fires unless the user turned it on.
+    if (store.get('soundAlertsEnabled')) {
+      const ramHigh = usage.ramPercent >= USAGE_RED_AT;
+      const cpuHigh = usage.cpuPercent != null && usage.cpuPercent >= USAGE_RED_AT;
+      if (ramHigh || cpuHigh) {
+        const now = Date.now();
+        if (now - lastSoundAlertAt >= SOUND_ALERT_COOLDOWN_MS) {
+          lastSoundAlertAt = now;
+          sendSoundAlert({ ramHigh, cpuHigh, ramPercent: usage.ramPercent, cpuPercent: usage.cpuPercent });
+        }
+      }
+    }
   } catch (err) {
     sendLog(`ERROR: ${err.message}`);
     sendStatus({ connected: false, error: err.message });
@@ -300,12 +336,16 @@ ipcMain.handle('stop-monitoring', () => {
   return { monitoring: false };
 });
 
-// Lets the user see what the overlay looks like at high usage - color only, briefly,
-// then automatically reverts to real numbers. No banner, no text, no sound.
+// Preview button: shows the overlay turning red, and (if enabled) plays the beep + spoken
+// warning too, so the user can test the full experience on demand. Reverts automatically.
 ipcMain.handle('preview-high-usage', () => {
   const wasVisible = !!(statsOverlayWindow && !statsOverlayWindow.isDestroyed() && statsOverlayWindow.isVisible());
   showStatsOverlay();
   updateStatsOverlay({ cpuPercent: 97, ramPercent: 99 });
+  if (store.get('soundAlertsEnabled')) {
+    lastSoundAlertAt = Date.now();
+    sendSoundAlert({ ramHigh: true, cpuHigh: true, ramPercent: 99, cpuPercent: 97 });
+  }
   setTimeout(() => {
     if (isMonitoring) {
       pollOnce();

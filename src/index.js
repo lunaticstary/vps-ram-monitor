@@ -13,6 +13,7 @@ const els = {
   showLiveUsageBar: document.getElementById('showLiveUsageBar'),
   showDesktopOverlay: document.getElementById('showDesktopOverlay'),
   compactLayout: document.getElementById('compactLayout'),
+  soundAlertsEnabled: document.getElementById('soundAlertsEnabled'),
   saveBtn: document.getElementById('saveBtn'),
   testAlertBtn: document.getElementById('testAlertBtn'),
   testConnBtn: document.getElementById('testConnBtn'),
@@ -71,6 +72,7 @@ function collectFormSettings() {
     showLiveUsageBar: els.showLiveUsageBar.checked,
     showDesktopOverlay: els.showDesktopOverlay.checked,
     compactLayout: els.compactLayout.checked,
+    soundAlertsEnabled: els.soundAlertsEnabled.checked,
   };
 }
 
@@ -87,6 +89,7 @@ function applySettingsToForm(s) {
   els.showLiveUsageBar.checked = s.showLiveUsageBar !== false;
   els.showDesktopOverlay.checked = s.showDesktopOverlay !== false;
   els.compactLayout.checked = !!s.compactLayout;
+  els.soundAlertsEnabled.checked = s.soundAlertsEnabled !== false;
   toggleAuthFields();
   applyDisplayPrefs();
 }
@@ -126,8 +129,10 @@ els.testConnBtn.addEventListener('click', async () => {
   }
 });
 
-// Only previews the overlay's color at a simulated high reading - no popup/sound involved.
+// Previews the overlay turning red AND (if sound alerts are on) the beep + spoken warning.
 els.testAlertBtn.addEventListener('click', () => {
+  // A user click right before this is exactly the gesture Chromium's autoplay
+  // policy wants, so audio/speech reliably works when triggered from here.
   window.api.previewHighUsage();
 });
 
@@ -166,6 +171,62 @@ window.api.onStatusUpdate((status) => {
 window.api.onLog((line) => {
   els.log.textContent += line + '\n';
   els.log.scrollTop = els.log.scrollHeight;
+});
+
+// ---- Sound & voice alerts (beeps + spoken warning) ----
+// This is the ONLY thing that makes noise. It is fully separate from the overlay's
+// color and from Narrow Mode - it only fires when the "Sound & Voice Alerts" toggle is on.
+let audioCtx = null;
+function ensureAudioCtx() {
+  if (!audioCtx) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AudioContextClass();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function beep(count = 4, freq = 880, duration = 0.12, gap = 0.12) {
+  const ctx = ensureAudioCtx();
+  let t = ctx.currentTime;
+  for (let i = 0; i < count; i++) {
+    const osc = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    gainNode.gain.setValueAtTime(0.0001, t);
+    gainNode.gain.exponentialRampToValueAtTime(0.2, t + 0.01);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+    osc.connect(gainNode).connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + duration + 0.02);
+    t += duration + gap;
+  }
+  return count * (duration + gap);
+}
+
+function speak(text) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.rate = 1;
+  utter.pitch = 1;
+  utter.volume = 1;
+  window.speechSynthesis.speak(utter);
+}
+
+window.api.onSoundAlert((data) => {
+  if (!els.soundAlertsEnabled.checked) return;
+  const beepsDurationSec = beep(4);
+  let text;
+  if (data.ramHigh && data.cpuHigh) {
+    text = `Warning. RAM usage is ${Math.round(data.ramPercent)} percent and CPU usage is ${Math.round(data.cpuPercent)} percent.`;
+  } else if (data.ramHigh) {
+    text = `Warning. RAM usage is ${Math.round(data.ramPercent)} percent.`;
+  } else {
+    text = `Warning. CPU usage is ${Math.round(data.cpuPercent)} percent.`;
+  }
+  setTimeout(() => speak(text), beepsDurationSec * 1000 + 150);
 });
 
 (async () => {

@@ -70,7 +70,16 @@
         Launch app on system startup
       </label>
       <button id="saveBtn">Save Settings</button>
-      <button id="testAlertBtn" class="warn">🧪 Preview High Usage (color only)</button>
+      <button id="testAlertBtn" class="warn">🧪 Test Alert (color + sound)</button>
+    </div>
+
+    <div class="card">
+      <h2>Sound &amp; Voice Alerts</h2>
+      <label class="checkbox">
+        <input id="soundAlertsEnabled" type="checkbox" />
+        🔊 Beep + speak a warning out loud when CPU or RAM usage is high (85%+)
+      </label>
+      <p class="hint">Independent of the overlay's color — this is the only thing that makes sound.</p>
     </div>
 
     <div class="card">
@@ -88,8 +97,8 @@
         Narrow Mode — makes the overlay (and this window) more compact
       </label>
       <p class="hint">
-        The overlay only ever changes color (green/yellow/red) based on usage — it never shows
-        warning text, popups, or sounds.
+        The overlay itself only ever changes color (green/yellow/red) — it never shows warning
+        text or popups. Narrow Mode is purely a size setting.
       </p>
     </div>
 

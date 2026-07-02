@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('api', {
   previewHighUsage: () => ipcRenderer.invoke('preview-high-usage'),
   onStatusUpdate: (callback) => ipcRenderer.on('status-update', (_e, data) => callback(data)),
   onLog: (callback) => ipcRenderer.on('log-line', (_e, line) => callback(line)),
+  onSoundAlert: (callback) => ipcRenderer.on('sound-alert', (_e, data) => callback(data)),
 });
 
 // Exposed to the small always-on-top desktop overlay window only.
