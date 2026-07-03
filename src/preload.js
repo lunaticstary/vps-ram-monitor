@@ -19,4 +19,7 @@ contextBridge.exposeInMainWorld('api', {
 // It only ever receives numbers to display - no alert/warning payloads.
 contextBridge.exposeInMainWorld('statsOverlayApi', {
   onData: (callback) => ipcRenderer.on('stats-overlay-data', (_e, data) => callback(data)),
+  // Tells main process the real rendered height so the window can grow/shrink to fit
+  // every row exactly - fixes the last server row getting clipped off the bottom.
+  reportSize: (height) => ipcRenderer.send('stats-overlay-resize', height),
 });

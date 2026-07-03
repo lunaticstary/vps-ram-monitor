@@ -22,6 +22,18 @@ function pillHtml(label, percent) {
   `;
 }
 
+// Measures the actual rendered content height and tells main to resize the window to
+// match exactly, so the last row never gets clipped regardless of how many servers or
+// how long their names are.
+function reportRealSize() {
+  requestAnimationFrame(() => {
+    const height = Math.ceil(root.getBoundingClientRect().height);
+    if (window.statsOverlayApi && height > 0) {
+      window.statsOverlayApi.reportSize(height);
+    }
+  });
+}
+
 // No warning text, no popups, no sounds here - purely a live color-coded readout per server.
 window.statsOverlayApi.onData((data) => {
   document.body.classList.toggle('compact', !!data.compact);
@@ -33,6 +45,7 @@ window.statsOverlayApi.onData((data) => {
         <div class="server-name">No servers configured</div>
       </div>
     `;
+    reportRealSize();
     return;
   }
 
@@ -46,10 +59,14 @@ window.statsOverlayApi.onData((data) => {
       const nameText = s.connected === false ? `${s.name} (offline)` : s.name;
       return `
         <div class="server-row">
-          <div class="${nameClass}">${nameText}</div>
+          <div class="${nameClass}" title="${nameText}">${nameText}</div>
           <div class="pills">${pills.join('')}</div>
         </div>
       `;
     })
     .join('');
+
+  reportRealSize();
 });
+
+window.addEventListener('resize', reportRealSize);

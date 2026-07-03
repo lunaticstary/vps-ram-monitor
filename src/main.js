@@ -97,6 +97,10 @@ function createMainWindow() {
 }
 
 function overlaySize() {
+  // Just an initial estimate for window creation - the renderer measures its own real
+  // content height after every render and reports it back (see 'stats-overlay-resize'),
+  // which is what actually determines the final height. This avoids the last server
+  // row ever getting clipped if a name is long or wraps.
   const compact = store.get('compactLayout');
   const rowH = compact ? OVERLAY_ROW_HEIGHT_COMPACT : OVERLAY_ROW_HEIGHT_NORMAL;
   const rows = Math.max(1, (store.get('servers') || []).length);
@@ -418,6 +422,18 @@ ipcMain.handle('save-settings', (_e, settings) => {
 });
 
 ipcMain.handle('get-servers', () => store.get('servers') || []);
+
+// The overlay renderer measures its own content after every render and reports the
+// real pixel height here, so the window always fits exactly - no clipped last row.
+ipcMain.on('stats-overlay-resize', (event, height) => {
+  if (!statsOverlayWindow || statsOverlayWindow.isDestroyed()) return;
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || win !== statsOverlayWindow) return;
+  const width = overlaySize().width;
+  const clampedHeight = Math.max(30, Math.round(height) + 2);
+  const pos = overlayPosition({ width });
+  statsOverlayWindow.setBounds({ x: pos.x, y: pos.y, width, height: clampedHeight });
+});
 
 ipcMain.handle('add-server', (_e, server) => {
   const servers = store.get('servers') || [];
