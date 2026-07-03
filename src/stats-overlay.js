@@ -1,11 +1,8 @@
-// Same color thresholds used in the dashboard's in-app bar - kept in sync intentionally.
+// Same color thresholds used in the dashboard - kept in sync intentionally.
 const USAGE_YELLOW_AT = 60;
 const USAGE_RED_AT = 85;
 
-const cpuPill = document.getElementById('cpuPill');
-const ramPill = document.getElementById('ramPill');
-const cpuValue = document.getElementById('cpuValue');
-const ramValue = document.getElementById('ramValue');
+const root = document.getElementById('root');
 
 function colorClass(percent) {
   if (percent == null || Number.isNaN(percent)) return null;
@@ -14,20 +11,45 @@ function colorClass(percent) {
   return 'usage-green';
 }
 
-function setPill(pillEl, valueEl, percent) {
-  pillEl.classList.remove('usage-green', 'usage-yellow', 'usage-red');
-  if (percent == null || Number.isNaN(percent)) {
-    valueEl.textContent = '--%';
-    return;
-  }
-  valueEl.textContent = `${percent}%`;
+function pillHtml(label, percent) {
   const cls = colorClass(percent);
-  if (cls) pillEl.classList.add(cls);
+  const valueText = percent == null || Number.isNaN(percent) ? '--%' : `${percent}%`;
+  return `
+    <div class="pill ${cls || ''}">
+      <span class="label">${label}</span>
+      <span class="value">${valueText}</span>
+    </div>
+  `;
 }
 
-// No warning text, no popups, no sounds here - purely a live color-coded readout.
+// No warning text, no popups, no sounds here - purely a live color-coded readout per server.
 window.statsOverlayApi.onData((data) => {
   document.body.classList.toggle('compact', !!data.compact);
-  setPill(cpuPill, cpuValue, data.cpuPercent);
-  setPill(ramPill, ramValue, data.ramPercent);
+  const servers = data.servers || [];
+
+  if (servers.length === 0) {
+    root.innerHTML = `
+      <div class="server-row">
+        <div class="server-name">No servers configured</div>
+      </div>
+    `;
+    return;
+  }
+
+  root.innerHTML = servers
+    .map((s) => {
+      const pills = [];
+      if (data.showCpu !== false) pills.push(pillHtml('CPU', s.cpuPercent));
+      if (data.showRam !== false) pills.push(pillHtml('RAM', s.ramPercent));
+      if (data.showDisk !== false) pills.push(pillHtml('DISK', s.diskPercent));
+      const nameClass = s.connected === false ? 'server-name offline' : 'server-name';
+      const nameText = s.connected === false ? `${s.name} (offline)` : s.name;
+      return `
+        <div class="server-row">
+          <div class="${nameClass}">${nameText}</div>
+          <div class="pills">${pills.join('')}</div>
+        </div>
+      `;
+    })
+    .join('');
 });

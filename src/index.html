@@ -6,59 +6,59 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="liveUsageBar" class="live-usage-bar">
-    <div id="cpuPill" class="live-pill">
-      <span class="dot-mini"></span>
-      <span class="label">CPU</span>
-      <span id="cpuValue" class="value">--%</span>
-    </div>
-    <div id="ramPill" class="live-pill">
-      <span class="dot-mini"></span>
-      <span class="label">RAM</span>
-      <span id="ramValue" class="value">--%</span>
-    </div>
-  </div>
-
   <div class="app">
     <h1>🖥️ VPS RAM Monitor</h1>
-    <p class="subtitle">SSH into your VPS and watch live CPU/RAM on a real desktop overlay.</p>
+    <p class="subtitle">SSH into one or more VPS servers and watch live CPU/RAM/Disk on a real desktop overlay.</p>
 
     <div class="card">
-      <h2>Connection</h2>
-      <label>Host / IP</label>
-      <input id="host" type="text" placeholder="1.2.3.4 or my-vps.com" />
+      <h2>Servers</h2>
+      <div id="serverList" class="server-list"></div>
 
-      <div class="row">
-        <div>
-          <label>Port</label>
-          <input id="port" type="number" value="22" />
+      <div class="add-server-form">
+        <label>Name (optional label)</label>
+        <input id="newName" type="text" placeholder="My VPS" />
+
+        <div class="row">
+          <div>
+            <label>Host / IP</label>
+            <input id="newHost" type="text" placeholder="1.2.3.4 or my-vps.com" />
+          </div>
+          <div>
+            <label>Port</label>
+            <input id="newPort" type="number" value="22" />
+          </div>
         </div>
-        <div>
-          <label>Username</label>
-          <input id="username" type="text" placeholder="root" />
+
+        <div class="row">
+          <div>
+            <label>Username</label>
+            <input id="newUsername" type="text" placeholder="root" />
+          </div>
+          <div>
+            <label>Auth method</label>
+            <select id="newAuthType">
+              <option value="password">Password</option>
+              <option value="key">Private Key</option>
+            </select>
+          </div>
         </div>
+
+        <div id="newPasswordField">
+          <label>Password</label>
+          <input id="newPassword" type="password" placeholder="••••••••" />
+        </div>
+
+        <div id="newKeyField" class="hidden">
+          <label>Private Key (paste contents of ~/.ssh/id_rsa)</label>
+          <textarea id="newPrivateKey" rows="3" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+          <label>Passphrase (optional)</label>
+          <input id="newPassphrase" type="password" />
+        </div>
+
+        <button id="testNewBtn" class="secondary">Test Connection</button>
+        <button id="addServerBtn">+ Add Server</button>
+        <span id="newServerResult"></span>
       </div>
-
-      <label>Auth method</label>
-      <select id="authType">
-        <option value="password">Password</option>
-        <option value="key">Private Key</option>
-      </select>
-
-      <div id="passwordField">
-        <label>Password</label>
-        <input id="password" type="password" placeholder="••••••••" />
-      </div>
-
-      <div id="keyField" class="hidden">
-        <label>Private Key (paste contents of ~/.ssh/id_rsa)</label>
-        <textarea id="privateKey" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
-        <label>Passphrase (optional)</label>
-        <input id="passphrase" type="password" />
-      </div>
-
-      <button id="testConnBtn" class="secondary">Test SSH Connection</button>
-      <span id="testConnResult"></span>
     </div>
 
     <div class="card">
@@ -77,7 +77,7 @@
       <h2>Sound &amp; Voice Alerts</h2>
       <label class="checkbox">
         <input id="soundAlertsEnabled" type="checkbox" />
-        🔊 Beep + speak a warning out loud when CPU or RAM usage is high (85%+)
+        🔊 Beep + speak a warning out loud when CPU, RAM, or Disk usage is high (85%+)
       </label>
       <p class="hint">Independent of the overlay's color — this is the only thing that makes sound.</p>
     </div>
@@ -90,16 +90,33 @@
       </label>
       <label class="checkbox">
         <input id="showLiveUsageBar" type="checkbox" />
-        Also show live bar inside this dashboard window
+        Also show live status list inside this dashboard window
       </label>
       <label class="checkbox">
         <input id="compactLayout" type="checkbox" />
         Narrow Mode — makes the overlay (and this window) more compact
       </label>
-      <p class="hint">
-        The overlay itself only ever changes color (green/yellow/red) — it never shows warning
-        text or popups. Narrow Mode is purely a size setting.
-      </p>
+      <p class="hint">The overlay always shows the server name above its stats, then only changes color — never warning text or popups.</p>
+
+      <div class="metric-toggles">
+        <label class="checkbox">
+          <input id="showCpu" type="checkbox" />
+          Show CPU
+        </label>
+        <label class="checkbox">
+          <input id="showRam" type="checkbox" />
+          Show RAM
+        </label>
+        <label class="checkbox">
+          <input id="showDisk" type="checkbox" />
+          Show Disk
+        </label>
+      </div>
+    </div>
+
+    <div id="liveStatusCard" class="card">
+      <h2>Live Status</h2>
+      <div id="liveStatusList" class="live-status-list"></div>
     </div>
 
     <div class="card">
@@ -108,7 +125,6 @@
         <span id="statusDot" class="dot dot-off"></span>
         <span id="statusText">Not monitoring</span>
       </div>
-      <div id="ramInfo" class="ram-info"></div>
       <button id="startBtn">▶ Start Monitoring</button>
       <button id="stopBtn" class="secondary">■ Stop</button>
       <p class="hint">The app keeps running in the background (system tray) even if you close this window.</p>

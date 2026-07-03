@@ -3,7 +3,10 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('api', {
   getSettings: () => ipcRenderer.invoke('get-settings'),
   saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
-  testConnection: (settings) => ipcRenderer.invoke('test-connection', settings),
+  getServers: () => ipcRenderer.invoke('get-servers'),
+  addServer: (server) => ipcRenderer.invoke('add-server', server),
+  removeServer: (id) => ipcRenderer.invoke('remove-server', id),
+  testServerConnection: (server) => ipcRenderer.invoke('test-server-connection', server),
   startMonitoring: () => ipcRenderer.invoke('start-monitoring'),
   stopMonitoring: () => ipcRenderer.invoke('stop-monitoring'),
   previewHighUsage: () => ipcRenderer.invoke('preview-high-usage'),

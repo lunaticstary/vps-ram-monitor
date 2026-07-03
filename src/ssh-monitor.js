@@ -1,60 +1,22 @@
 const { Client } = require('ssh2');
 
+const DISK_MARKER = '__DISK_SAMPLE__';
 const CPU_MARKER_1 = '__CPU_SAMPLE_1__';
 const CPU_MARKER_2 = '__CPU_SAMPLE_2__';
 
-/**
- * Connects to a VPS over SSH and reads current RAM usage using /proc/meminfo.
- * Returns a promise resolving to { usedPercent, totalMB, usedMB, availableMB }
- */
-function fetchRamUsage(config) {
-  return new Promise((resolve, reject) => {
-    const conn = new Client();
-    const timeout = setTimeout(() => {
-      conn.end();
-      reject(new Error('SSH connection timed out'));
-    }, 15000);
-
-    conn
-      .on('ready', () => {
-        conn.exec('cat /proc/meminfo', (err, stream) => {
-          if (err) {
-            clearTimeout(timeout);
-            conn.end();
-            return reject(err);
-          }
-          let data = '';
-          stream
-            .on('close', () => {
-              clearTimeout(timeout);
-              conn.end();
-              try {
-                resolve(parseMemInfo(data));
-              } catch (parseErr) {
-                reject(parseErr);
-              }
-            })
-            .on('data', (chunk) => {
-              data += chunk.toString();
-            })
-            .stderr.on('data', () => {
-              // ignore stderr noise
-            });
-        });
-      })
-      .on('error', (err) => {
-        clearTimeout(timeout);
-        reject(err);
-      })
-      .connect(buildConnectOptions(config));
-  });
+function splitOnce(str, marker) {
+  const idx = str.indexOf(marker);
+  if (idx === -1) return [str, ''];
+  return [str.slice(0, idx), str.slice(idx + marker.length)];
 }
 
 /**
- * Connects once and reads BOTH RAM (via /proc/meminfo) and CPU usage
- * (via two /proc/stat samples 1s apart) in a single SSH session.
+ * Connects once and reads RAM (via /proc/meminfo), disk usage for `/` (via `df`),
+ * and CPU usage (via two /proc/stat samples 1s apart) in a single SSH session.
  * Returns a promise resolving to:
- *   { ramPercent, ramTotalMB, ramUsedMB, ramAvailableMB, cpuPercent }
+ *   { ramPercent, ramTotalMB, ramUsedMB, ramAvailableMB,
+ *     diskPercent, diskTotalMB, diskUsedMB, diskAvailableMB,
+ *     cpuPercent }
  */
 function fetchSystemUsage(config) {
   return new Promise((resolve, reject) => {
@@ -66,6 +28,8 @@ function fetchSystemUsage(config) {
 
     const cmd = [
       'cat /proc/meminfo',
+      `echo ${DISK_MARKER}`,
+      "df -P -k / | tail -n 1",
       `echo ${CPU_MARKER_1}`,
       "grep '^cpu ' /proc/stat",
       'sleep 1',
@@ -158,6 +122,28 @@ function parseMemInfo(raw) {
 }
 
 /**
+ * Parses a `df -P -k /` data line, e.g.:
+ *   /dev/sda1      20971520 8384512  11538816  43% /
+ */
+function parseDiskLine(raw) {
+  const line = (raw.match(/^\S+\s+\d+\s+\d+\s+\d+\s+\d+%\s+\S.*$/m) || [])[0];
+  if (!line) {
+    throw new Error('Could not parse disk usage (df) output from VPS');
+  }
+  const match = line.trim().match(/^(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)%\s+(.+)$/);
+  if (!match) {
+    throw new Error('Could not parse disk usage (df) output from VPS');
+  }
+  const [, , totalKB, usedKB, availKB, percent] = match;
+  return {
+    usedPercent: Number(percent),
+    totalMB: Math.round(Number(totalKB) / 1024),
+    usedMB: Math.round(Number(usedKB) / 1024),
+    availableMB: Math.round(Number(availKB) / 1024),
+  };
+}
+
+/**
  * Parses a "cpu  user nice system idle iowait irq softirq steal guest guest_nice"
  * line from /proc/stat into { idle, total }.
  */
@@ -170,13 +156,18 @@ function parseCpuStatLine(line) {
 }
 
 function parseSystemUsage(raw) {
-  const memPart = raw.split(CPU_MARKER_1)[0];
+  const [memPart, afterDiskMarker] = splitOnce(raw, DISK_MARKER);
   const memInfo = parseMemInfo(memPart);
 
-  const afterMarker1 = raw.split(CPU_MARKER_1)[1] || '';
-  const cpuSample1Raw = afterMarker1.split(CPU_MARKER_2)[0];
-  const cpuSample2Raw = afterMarker1.split(CPU_MARKER_2)[1] || '';
+  const [diskPart, afterCpuMarker1] = splitOnce(afterDiskMarker, CPU_MARKER_1);
+  let diskInfo = null;
+  try {
+    diskInfo = parseDiskLine(diskPart);
+  } catch (e) {
+    diskInfo = null; // disk is best-effort; don't fail the whole poll over it
+  }
 
+  const [cpuSample1Raw, cpuSample2Raw] = splitOnce(afterCpuMarker1, CPU_MARKER_2);
   const cpuLine1 = (cpuSample1Raw.match(/^cpu\s+.*/m) || [])[0];
   const cpuLine2 = (cpuSample2Raw.match(/^cpu\s+.*/m) || [])[0];
 
@@ -197,6 +188,10 @@ function parseSystemUsage(raw) {
     ramTotalMB: memInfo.totalMB,
     ramUsedMB: memInfo.usedMB,
     ramAvailableMB: memInfo.availableMB,
+    diskPercent: diskInfo ? diskInfo.usedPercent : null,
+    diskTotalMB: diskInfo ? diskInfo.totalMB : null,
+    diskUsedMB: diskInfo ? diskInfo.usedMB : null,
+    diskAvailableMB: diskInfo ? diskInfo.availableMB : null,
     cpuPercent,
   };
 }
@@ -226,4 +221,11 @@ function testConnection(config) {
   });
 }
 
-module.exports = { fetchRamUsage, fetchSystemUsage, testConnection, parseMemInfo, parseCpuStatLine, parseSystemUsage };
+module.exports = {
+  fetchSystemUsage,
+  testConnection,
+  parseMemInfo,
+  parseDiskLine,
+  parseCpuStatLine,
+  parseSystemUsage,
+};

@@ -1,34 +1,38 @@
 const els = {
-  host: document.getElementById('host'),
-  port: document.getElementById('port'),
-  username: document.getElementById('username'),
-  authType: document.getElementById('authType'),
-  password: document.getElementById('password'),
-  privateKey: document.getElementById('privateKey'),
-  passphrase: document.getElementById('passphrase'),
-  passwordField: document.getElementById('passwordField'),
-  keyField: document.getElementById('keyField'),
+  serverList: document.getElementById('serverList'),
+  newName: document.getElementById('newName'),
+  newHost: document.getElementById('newHost'),
+  newPort: document.getElementById('newPort'),
+  newUsername: document.getElementById('newUsername'),
+  newAuthType: document.getElementById('newAuthType'),
+  newPassword: document.getElementById('newPassword'),
+  newPrivateKey: document.getElementById('newPrivateKey'),
+  newPassphrase: document.getElementById('newPassphrase'),
+  newPasswordField: document.getElementById('newPasswordField'),
+  newKeyField: document.getElementById('newKeyField'),
+  testNewBtn: document.getElementById('testNewBtn'),
+  addServerBtn: document.getElementById('addServerBtn'),
+  newServerResult: document.getElementById('newServerResult'),
+
   pollIntervalSec: document.getElementById('pollIntervalSec'),
   launchOnStartup: document.getElementById('launchOnStartup'),
   showLiveUsageBar: document.getElementById('showLiveUsageBar'),
   showDesktopOverlay: document.getElementById('showDesktopOverlay'),
   compactLayout: document.getElementById('compactLayout'),
   soundAlertsEnabled: document.getElementById('soundAlertsEnabled'),
+  showCpu: document.getElementById('showCpu'),
+  showRam: document.getElementById('showRam'),
+  showDisk: document.getElementById('showDisk'),
+
   saveBtn: document.getElementById('saveBtn'),
   testAlertBtn: document.getElementById('testAlertBtn'),
-  testConnBtn: document.getElementById('testConnBtn'),
-  testConnResult: document.getElementById('testConnResult'),
   startBtn: document.getElementById('startBtn'),
   stopBtn: document.getElementById('stopBtn'),
   statusDot: document.getElementById('statusDot'),
   statusText: document.getElementById('statusText'),
-  ramInfo: document.getElementById('ramInfo'),
   log: document.getElementById('log'),
-  liveUsageBar: document.getElementById('liveUsageBar'),
-  cpuPill: document.getElementById('cpuPill'),
-  ramPill: document.getElementById('ramPill'),
-  cpuValue: document.getElementById('cpuValue'),
-  ramValue: document.getElementById('ramValue'),
+  liveStatusCard: document.getElementById('liveStatusCard'),
+  liveStatusList: document.getElementById('liveStatusList'),
 };
 
 // Usage color thresholds - shared conceptually with the desktop overlay widget.
@@ -42,91 +46,171 @@ function usageColorClass(percent) {
   return 'green';
 }
 
-function setPill(pillEl, valueEl, percent) {
-  pillEl.classList.remove('usage-green', 'usage-yellow', 'usage-red');
-  if (percent == null || Number.isNaN(percent)) {
-    valueEl.textContent = '--%';
+function pillHtml(label, percent, visible) {
+  if (!visible) return '';
+  const cls = usageColorClass(percent);
+  const valueText = percent == null || Number.isNaN(percent) ? '--%' : `${percent}%`;
+  return `
+    <div class="live-pill ${cls ? `usage-${cls}` : ''}">
+      <span class="dot-mini"></span>
+      <span class="label">${label}</span>
+      <span class="value">${valueText}</span>
+    </div>
+  `;
+}
+
+function overallStatusColorClass(servers) {
+  const percents = [];
+  servers.forEach((s) => {
+    if (typeof s.ramPercent === 'number') percents.push(s.ramPercent);
+    if (typeof s.cpuPercent === 'number') percents.push(s.cpuPercent);
+    if (typeof s.diskPercent === 'number') percents.push(s.diskPercent);
+  });
+  if (percents.length === 0) return null;
+  return usageColorClass(Math.max(...percents));
+}
+
+// ---- Server list (add/remove/test) ----
+let currentServers = [];
+
+function toggleNewAuthFields() {
+  const isKey = els.newAuthType.value === 'key';
+  els.newKeyField.classList.toggle('hidden', !isKey);
+  els.newPasswordField.classList.toggle('hidden', isKey);
+}
+els.newAuthType.addEventListener('change', toggleNewAuthFields);
+toggleNewAuthFields();
+
+function collectNewServerForm() {
+  return {
+    name: els.newName.value.trim(),
+    host: els.newHost.value.trim(),
+    port: Number(els.newPort.value) || 22,
+    username: els.newUsername.value.trim(),
+    authType: els.newAuthType.value,
+    password: els.newPassword.value,
+    privateKey: els.newPrivateKey.value,
+    passphrase: els.newPassphrase.value,
+  };
+}
+
+function clearNewServerForm() {
+  els.newName.value = '';
+  els.newHost.value = '';
+  els.newPort.value = 22;
+  els.newUsername.value = '';
+  els.newAuthType.value = 'password';
+  els.newPassword.value = '';
+  els.newPrivateKey.value = '';
+  els.newPassphrase.value = '';
+  toggleNewAuthFields();
+}
+
+function renderServerList() {
+  if (currentServers.length === 0) {
+    els.serverList.innerHTML = '<p class="hint">No servers added yet — add one below.</p>';
     return;
   }
-  valueEl.textContent = `${percent}%`;
-  const cls = usageColorClass(percent);
-  if (cls) pillEl.classList.add(`usage-${cls}`);
+  els.serverList.innerHTML = currentServers
+    .map(
+      (s) => `
+      <div class="server-item" data-id="${s.id}">
+        <div class="server-item-info">
+          <div class="server-item-name">${s.name || s.host}</div>
+          <div class="server-item-sub">${s.username}@${s.host}:${s.port}</div>
+        </div>
+        <div class="server-item-actions">
+          <button class="secondary small test-server-btn" data-id="${s.id}">Test</button>
+          <button class="destructive small remove-server-btn" data-id="${s.id}">Remove</button>
+        </div>
+      </div>
+    `
+    )
+    .join('');
+
+  els.serverList.querySelectorAll('.test-server-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const server = currentServers.find((s) => s.id === btn.dataset.id);
+      btn.textContent = 'Testing...';
+      const result = await window.api.testServerConnection(server);
+      btn.textContent = result.ok ? '✓ OK' : '✗ Failed';
+      setTimeout(() => (btn.textContent = 'Test'), 2500);
+    });
+  });
+
+  els.serverList.querySelectorAll('.remove-server-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      currentServers = await window.api.removeServer(btn.dataset.id);
+      renderServerList();
+    });
+  });
 }
 
-function setStatusDotColor(percent) {
-  const cls = usageColorClass(percent);
-  els.statusDot.className = `dot dot-${cls || 'on'}`;
-}
+els.testNewBtn.addEventListener('click', async () => {
+  els.newServerResult.textContent = 'Testing...';
+  els.newServerResult.style.color = '#9aa0ac';
+  const result = await window.api.testServerConnection(collectNewServerForm());
+  if (result.ok) {
+    els.newServerResult.textContent = '✓ Connected successfully';
+    els.newServerResult.style.color = '#22c55e';
+  } else {
+    els.newServerResult.textContent = '✗ ' + result.error;
+    els.newServerResult.style.color = '#e5484d';
+  }
+});
 
+els.addServerBtn.addEventListener('click', async () => {
+  const server = collectNewServerForm();
+  if (!server.host || !server.username) {
+    els.newServerResult.textContent = 'Host and username are required.';
+    els.newServerResult.style.color = '#e5484d';
+    return;
+  }
+  currentServers = await window.api.addServer(server);
+  clearNewServerForm();
+  els.newServerResult.textContent = '';
+  renderServerList();
+});
+
+// ---- Global settings ----
 function collectFormSettings() {
   return {
-    host: els.host.value.trim(),
-    port: Number(els.port.value) || 22,
-    username: els.username.value.trim(),
-    authType: els.authType.value,
-    password: els.password.value,
-    privateKey: els.privateKey.value,
-    passphrase: els.passphrase.value,
     pollIntervalSec: Number(els.pollIntervalSec.value) || 15,
     launchOnStartup: els.launchOnStartup.checked,
     showLiveUsageBar: els.showLiveUsageBar.checked,
     showDesktopOverlay: els.showDesktopOverlay.checked,
     compactLayout: els.compactLayout.checked,
     soundAlertsEnabled: els.soundAlertsEnabled.checked,
+    showCpu: els.showCpu.checked,
+    showRam: els.showRam.checked,
+    showDisk: els.showDisk.checked,
   };
 }
 
 function applySettingsToForm(s) {
-  els.host.value = s.host || '';
-  els.port.value = s.port || 22;
-  els.username.value = s.username || '';
-  els.authType.value = s.authType || 'password';
-  els.password.value = s.password || '';
-  els.privateKey.value = s.privateKey || '';
-  els.passphrase.value = s.passphrase || '';
   els.pollIntervalSec.value = s.pollIntervalSec || 15;
   els.launchOnStartup.checked = !!s.launchOnStartup;
   els.showLiveUsageBar.checked = s.showLiveUsageBar !== false;
   els.showDesktopOverlay.checked = s.showDesktopOverlay !== false;
   els.compactLayout.checked = !!s.compactLayout;
   els.soundAlertsEnabled.checked = s.soundAlertsEnabled !== false;
-  toggleAuthFields();
+  els.showCpu.checked = s.showCpu !== false;
+  els.showRam.checked = s.showRam !== false;
+  els.showDisk.checked = s.showDisk !== false;
   applyDisplayPrefs();
 }
 
-function toggleAuthFields() {
-  const isKey = els.authType.value === 'key';
-  els.keyField.classList.toggle('hidden', !isKey);
-  els.passwordField.classList.toggle('hidden', isKey);
-}
-
 function applyDisplayPrefs() {
-  els.liveUsageBar.classList.toggle('hidden', !els.showLiveUsageBar.checked);
+  els.liveStatusCard.classList.toggle('hidden', !els.showLiveUsageBar.checked);
   document.body.classList.toggle('compact', els.compactLayout.checked);
 }
 
-els.authType.addEventListener('change', toggleAuthFields);
 els.showLiveUsageBar.addEventListener('change', applyDisplayPrefs);
 els.compactLayout.addEventListener('change', applyDisplayPrefs);
 
 els.saveBtn.addEventListener('click', async () => {
-  const settings = collectFormSettings();
-  await window.api.saveSettings(settings);
+  await window.api.saveSettings(collectFormSettings());
   applyDisplayPrefs();
-});
-
-els.testConnBtn.addEventListener('click', async () => {
-  els.testConnResult.textContent = 'Testing...';
-  els.testConnResult.style.color = '#9aa0ac';
-  const settings = collectFormSettings();
-  const result = await window.api.testConnection(settings);
-  if (result.ok) {
-    els.testConnResult.textContent = '✓ Connected successfully';
-    els.testConnResult.style.color = '#22c55e';
-  } else {
-    els.testConnResult.textContent = '✗ ' + result.error;
-    els.testConnResult.style.color = '#e5484d';
-  }
 });
 
 // Previews the overlay turning red AND (if sound alerts are on) the beep + spoken warning.
@@ -153,18 +237,47 @@ window.api.onStatusUpdate((status) => {
     els.statusDot.className = 'dot dot-off';
     els.statusText.textContent = 'Not monitoring';
   }
-  if (status.connected === false) {
-    els.statusDot.className = 'dot dot-off';
-    els.statusText.textContent = 'Connection error';
-  }
-  if (typeof status.usedPercent === 'number') {
-    els.ramInfo.textContent = `RAM: ${status.usedPercent}% used (${status.usedMB}MB / ${status.totalMB}MB)`;
-    setPill(els.ramPill, els.ramValue, status.usedPercent);
-    setStatusDotColor(status.usedPercent);
-    els.statusText.textContent = 'Monitoring...';
-  }
-  if (typeof status.cpuPercent === 'number') {
-    setPill(els.cpuPill, els.cpuValue, status.cpuPercent);
+
+  if (Array.isArray(status.servers)) {
+    if (status.servers.length === 0) {
+      els.liveStatusList.innerHTML = '<p class="hint">No servers configured yet.</p>';
+    } else {
+      const showCpu = els.showCpu.checked;
+      const showRam = els.showRam.checked;
+      const showDisk = els.showDisk.checked;
+      els.liveStatusList.innerHTML = status.servers
+        .map((s) => {
+          if (s.connected === false) {
+            return `
+              <div class="live-status-row">
+                <div class="live-status-name offline">${s.name} — connection error</div>
+              </div>
+            `;
+          }
+          const pills = [
+            pillHtml('CPU', s.cpuPercent, showCpu),
+            pillHtml('RAM', s.ramPercent, showRam),
+            pillHtml('DISK', s.diskPercent, showDisk),
+          ].join('');
+          return `
+            <div class="live-status-row">
+              <div class="live-status-name">${s.name}</div>
+              <div class="live-status-pills">${pills}</div>
+            </div>
+          `;
+        })
+        .join('');
+    }
+
+    const cls = overallStatusColorClass(status.servers.filter((s) => s.connected !== false));
+    const anyError = status.servers.some((s) => s.connected === false);
+    if (anyError) {
+      els.statusDot.className = 'dot dot-off';
+      els.statusText.textContent = 'One or more servers unreachable';
+    } else if (cls) {
+      els.statusDot.className = `dot dot-${cls}`;
+      els.statusText.textContent = 'Monitoring...';
+    }
   }
 });
 
@@ -215,21 +328,26 @@ function speak(text) {
   window.speechSynthesis.speak(utter);
 }
 
+function describeAlert(a) {
+  const parts = [];
+  if (a.ramHigh) parts.push(`RAM at ${Math.round(a.ramPercent)} percent`);
+  if (a.cpuHigh) parts.push(`CPU at ${Math.round(a.cpuPercent)} percent`);
+  if (a.diskHigh) parts.push(`Disk at ${Math.round(a.diskPercent)} percent`);
+  return `${a.name}: ${parts.join(', ')}.`;
+}
+
 window.api.onSoundAlert((data) => {
   if (!els.soundAlertsEnabled.checked) return;
+  const alerts = data.alerts || [];
+  if (alerts.length === 0) return;
   const beepsDurationSec = beep(4);
-  let text;
-  if (data.ramHigh && data.cpuHigh) {
-    text = `Warning. RAM usage is ${Math.round(data.ramPercent)} percent and CPU usage is ${Math.round(data.cpuPercent)} percent.`;
-  } else if (data.ramHigh) {
-    text = `Warning. RAM usage is ${Math.round(data.ramPercent)} percent.`;
-  } else {
-    text = `Warning. CPU usage is ${Math.round(data.cpuPercent)} percent.`;
-  }
+  const text = `Warning. ${alerts.map(describeAlert).join(' ')}`;
   setTimeout(() => speak(text), beepsDurationSec * 1000 + 150);
 });
 
 (async () => {
   const settings = await window.api.getSettings();
   applySettingsToForm(settings);
+  currentServers = await window.api.getServers();
+  renderServerList();
 })();

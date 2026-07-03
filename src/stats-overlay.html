@@ -12,52 +12,66 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       user-select: none;
     }
-    .widget {
+    #root {
       display: flex;
-      gap: 8px;
-      height: 100%;
-      align-items: center;
-      justify-content: center;
-      padding: 0 8px;
+      flex-direction: column;
+      gap: 6px;
+      padding: 8px;
+    }
+    .server-row {
+      background: rgba(20, 22, 30, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 5px 8px;
+      backdrop-filter: blur(4px);
+    }
+    .server-name {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      color: rgba(255, 255, 255, 0.75);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 3px;
+    }
+    .server-name.offline { color: rgba(255, 120, 120, 0.85); }
+    .pills {
+      display: flex;
+      gap: 6px;
     }
     .pill {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 1px;
-      padding: 6px 12px;
-      border-radius: 10px;
+      gap: 0px;
+      padding: 4px 9px;
+      border-radius: 8px;
       background: rgba(255, 255, 255, 0.08);
       border: 1px solid rgba(255, 255, 255, 0.14);
       color: #cbd0da;
-      min-width: 64px;
-      backdrop-filter: blur(4px);
+      flex: 1;
+      min-width: 0;
       transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
     }
-    .pill .label { font-size: 9px; letter-spacing: 0.5px; opacity: 0.75; font-weight: 600; }
-    .pill .value { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .pill .label { font-size: 8px; letter-spacing: 0.4px; opacity: 0.75; font-weight: 600; }
+    .pill .value { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
 
     .pill.usage-green { background: rgba(34, 197, 94, 0.22); border-color: rgba(34, 197, 94, 0.55); color: #eafff1; }
     .pill.usage-yellow { background: rgba(234, 179, 8, 0.22); border-color: rgba(234, 179, 8, 0.55); color: #fffbea; }
     .pill.usage-red { background: rgba(239, 68, 68, 0.28); border-color: rgba(239, 68, 68, 0.65); color: #fff0f0; }
 
-    body.compact .pill { padding: 4px 8px; min-width: 46px; gap: 0; }
-    body.compact .pill .label { font-size: 8px; }
-    body.compact .pill .value { font-size: 13px; }
+    body.compact .server-name { font-size: 8px; margin-bottom: 2px; }
+    body.compact .pill { padding: 3px 6px; }
+    body.compact .pill .label { font-size: 7px; }
+    body.compact .pill .value { font-size: 11px; }
+    body.compact #root { gap: 4px; padding: 6px; }
+    body.compact .server-row { padding: 3px 6px; }
   </style>
 </head>
 <body>
-  <div class="widget">
-    <div id="cpuPill" class="pill">
-      <span class="label">CPU</span>
-      <span id="cpuValue" class="value">--%</span>
-    </div>
-    <div id="ramPill" class="pill">
-      <span class="label">RAM</span>
-      <span id="ramValue" class="value">--%</span>
-    </div>
-  </div>
+  <div id="root"></div>
   <script src="stats-overlay.js"></script>
 </body>
 </html>
