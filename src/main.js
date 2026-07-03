@@ -321,9 +321,11 @@ async function pollOnce() {
         diskTotalMB: usage.diskTotalMB,
       });
 
-      const ramHigh = usage.ramPercent >= USAGE_RED_AT;
-      const cpuHigh = usage.cpuPercent != null && usage.cpuPercent >= USAGE_RED_AT;
-      const diskHigh = usage.diskPercent != null && usage.diskPercent >= USAGE_RED_AT;
+      // Only alert on a metric if it's actually visible/enabled - a hidden metric
+      // should never be able to trigger a sound alert.
+      const ramHigh = store.get('showRam') && usage.ramPercent >= USAGE_RED_AT;
+      const cpuHigh = store.get('showCpu') && usage.cpuPercent != null && usage.cpuPercent >= USAGE_RED_AT;
+      const diskHigh = store.get('showDisk') && usage.diskPercent != null && usage.diskPercent >= USAGE_RED_AT;
       if (ramHigh || cpuHigh || diskHigh) {
         alerts.push({
           name: label,
@@ -502,14 +504,15 @@ ipcMain.handle('preview-high-usage', () => {
   showStatsOverlay();
   updateStatsOverlay(fakeServers);
 
+  // Match real behavior: a hidden metric never gets announced, even in the preview.
   if (store.get('soundAlertsEnabled')) {
     lastSoundAlertAt = Date.now();
     sendSoundAlert({
       alerts: fakeServers.map((s) => ({
         name: s.name,
-        ramHigh: true,
-        cpuHigh: true,
-        diskHigh: true,
+        ramHigh: store.get('showRam'),
+        cpuHigh: store.get('showCpu'),
+        diskHigh: store.get('showDisk'),
         ramPercent: s.ramPercent,
         cpuPercent: s.cpuPercent,
         diskPercent: s.diskPercent,
