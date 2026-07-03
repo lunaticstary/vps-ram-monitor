@@ -20,6 +20,8 @@ const store = new Store({
     showCpu: true,
     showRam: true,
     showDisk: true,
+    overlayBackgroundColor: '#14161e', // customizable overlay background color
+    overlayCustomPosition: null, // { x, y } once the user drags the overlay; null = default top-right anchor
     // legacy single-server fields, kept only so we can migrate old configs below
     host: '',
     port: 22,
@@ -71,6 +73,8 @@ let tray = null;
 let monitorTimer = null;
 let isMonitoring = false;
 let lastSoundAlertAt = 0;
+let overlayMoveModeActive = false;
+let lastStatusList = []; // last known per-server stats, so we can instantly re-render the overlay when display settings (like color) change
 
 function createMainWindow() {
   const compact = store.get('compactLayout');
@@ -111,10 +115,18 @@ function overlaySize() {
 }
 
 function overlayPosition(size) {
-  const { x, y, width } = screen.getPrimaryDisplay().workArea;
+  const work = screen.getPrimaryDisplay().workArea;
+  const custom = store.get('overlayCustomPosition');
+  if (custom && typeof custom.x === 'number' && typeof custom.y === 'number') {
+    // Clamp so a resolution change (or a drag that ended slightly off-screen) can't
+    // strand the overlay somewhere unreachable.
+    const x = Math.min(Math.max(custom.x, work.x), work.x + work.width - size.width);
+    const y = Math.min(Math.max(custom.y, work.y), work.y + work.height - size.height);
+    return { x, y };
+  }
   return {
-    x: x + width - size.width - OVERLAY_MARGIN,
-    y: y + OVERLAY_MARGIN,
+    x: work.x + work.width - size.width - OVERLAY_MARGIN,
+    y: work.y + OVERLAY_MARGIN,
   };
 }
 
@@ -131,7 +143,7 @@ function createStatsOverlayWindow() {
     transparent: true,
     alwaysOnTop: true,
     resizable: false,
-    movable: false,
+    movable: true,
     skipTaskbar: true,
     focusable: false,
     hasShadow: false,
@@ -155,6 +167,15 @@ function createStatsOverlayWindow() {
 
   statsOverlayWindow.on('closed', () => {
     statsOverlayWindow = null;
+  });
+
+  // Only persist a new position while the user explicitly enabled "Move Overlay" mode -
+  // programmatic setBounds() calls (resize, reposition) also fire 'moved', and we don't
+  // want those overwriting/creating a custom position on their own.
+  statsOverlayWindow.on('moved', () => {
+    if (!overlayMoveModeActive || !statsOverlayWindow || statsOverlayWindow.isDestroyed()) return;
+    const bounds = statsOverlayWindow.getBounds();
+    store.set('overlayCustomPosition', { x: bounds.x, y: bounds.y });
   });
 }
 
@@ -185,6 +206,7 @@ function hideStatsOverlay() {
 }
 
 function updateStatsOverlay(servers) {
+  lastStatusList = servers;
   if (!statsOverlayWindow || statsOverlayWindow.isDestroyed()) return;
   const payload = {
     servers,
@@ -192,6 +214,7 @@ function updateStatsOverlay(servers) {
     showCpu: store.get('showCpu'),
     showRam: store.get('showRam'),
     showDisk: store.get('showDisk'),
+    bgColor: store.get('overlayBackgroundColor'),
   };
   const send = () => statsOverlayWindow.webContents.send('stats-overlay-data', payload);
   if (statsOverlayWindow.webContents.isLoading()) {
@@ -254,7 +277,7 @@ function refreshTrayMenu() {
     },
     { type: 'separator' },
     {
-      label: 'Quit',
+      label: 'Exit',
       click: () => {
         app.isQuitting = true;
         app.quit();
@@ -390,6 +413,7 @@ ipcMain.handle('get-settings', () => store.store);
 ipcMain.handle('save-settings', (_e, settings) => {
   const prevCompact = store.get('compactLayout');
   const prevShowOverlay = store.get('showDesktopOverlay');
+  const prevBgColor = store.get('overlayBackgroundColor');
   const allowedKeys = [
     'pollIntervalSec',
     'launchOnStartup',
@@ -400,6 +424,7 @@ ipcMain.handle('save-settings', (_e, settings) => {
     'showCpu',
     'showRam',
     'showDisk',
+    'overlayBackgroundColor',
   ];
   allowedKeys.forEach((key) => {
     if (Object.prototype.hasOwnProperty.call(settings, key)) store.set(key, settings[key]);
@@ -419,6 +444,12 @@ ipcMain.handle('save-settings', (_e, settings) => {
     if (!settings.showDesktopOverlay) hideStatsOverlay();
   }
 
+  if (settings.overlayBackgroundColor && settings.overlayBackgroundColor !== prevBgColor) {
+    // Re-push the overlay's last known data immediately so the new color shows right away,
+    // instead of waiting for the next poll cycle.
+    updateStatsOverlay(lastStatusList);
+  }
+
   sendLog('Settings saved.');
   return store.store;
 });
@@ -433,8 +464,36 @@ ipcMain.on('stats-overlay-resize', (event, height) => {
   if (!win || win !== statsOverlayWindow) return;
   const width = overlaySize().width;
   const clampedHeight = Math.max(30, Math.round(height) + 2);
-  const pos = overlayPosition({ width });
+  const pos = overlayPosition({ width, height: clampedHeight });
   statsOverlayWindow.setBounds({ x: pos.x, y: pos.y, width, height: clampedHeight });
+});
+
+// "Move Overlay" mode: while active, the overlay becomes draggable (and briefly focusable/
+// interactable) instead of a pure click-through readout, so the user can drag it anywhere.
+// Dragging is handled by a CSS -webkit-app-region:drag region in the overlay page itself.
+ipcMain.handle('set-overlay-move-mode', (_e, enabled) => {
+  overlayMoveModeActive = !!enabled;
+  ensureStatsOverlayWindow();
+  const wasVisible = statsOverlayWindow.isVisible();
+
+  if (overlayMoveModeActive) {
+    statsOverlayWindow.setFocusable(true);
+    statsOverlayWindow.setIgnoreMouseEvents(false);
+    if (!wasVisible) statsOverlayWindow.show();
+  } else {
+    statsOverlayWindow.setIgnoreMouseEvents(true, { forward: true });
+    statsOverlayWindow.setFocusable(false);
+    if (!isMonitoring) hideStatsOverlay();
+  }
+
+  statsOverlayWindow.webContents.send('overlay-movable-changed', overlayMoveModeActive);
+  return { enabled: overlayMoveModeActive };
+});
+
+ipcMain.handle('reset-overlay-position', () => {
+  store.set('overlayCustomPosition', null);
+  repositionStatsOverlay();
+  return { ok: true };
 });
 
 ipcMain.handle('add-server', (_e, server) => {

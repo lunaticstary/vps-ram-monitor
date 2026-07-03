@@ -23,6 +23,9 @@ const els = {
   showCpu: document.getElementById('showCpu'),
   showRam: document.getElementById('showRam'),
   showDisk: document.getElementById('showDisk'),
+  overlayBgColor: document.getElementById('overlayBgColor'),
+  moveOverlayBtn: document.getElementById('moveOverlayBtn'),
+  resetOverlayPosBtn: document.getElementById('resetOverlayPosBtn'),
 
   saveBtn: document.getElementById('saveBtn'),
   testAlertBtn: document.getElementById('testAlertBtn'),
@@ -184,6 +187,7 @@ function collectFormSettings() {
     showCpu: els.showCpu.checked,
     showRam: els.showRam.checked,
     showDisk: els.showDisk.checked,
+    overlayBackgroundColor: els.overlayBgColor.value,
   };
 }
 
@@ -197,6 +201,7 @@ function applySettingsToForm(s) {
   els.showCpu.checked = s.showCpu !== false;
   els.showRam.checked = s.showRam !== false;
   els.showDisk.checked = s.showDisk !== false;
+  els.overlayBgColor.value = s.overlayBackgroundColor || '#14161e';
   applyDisplayPrefs();
 }
 
@@ -207,6 +212,22 @@ function applyDisplayPrefs() {
 
 els.showLiveUsageBar.addEventListener('change', applyDisplayPrefs);
 els.compactLayout.addEventListener('change', applyDisplayPrefs);
+
+els.overlayBgColor.addEventListener('input', async () => {
+  await window.api.saveSettings(collectFormSettings());
+});
+
+let overlayMoveModeOn = false;
+els.moveOverlayBtn.addEventListener('click', async () => {
+  overlayMoveModeOn = !overlayMoveModeOn;
+  await window.api.setOverlayMoveMode(overlayMoveModeOn);
+  els.moveOverlayBtn.textContent = overlayMoveModeOn ? '🔒 Lock Position' : '📍 Move Overlay';
+  els.moveOverlayBtn.classList.toggle('active', overlayMoveModeOn);
+});
+
+els.resetOverlayPosBtn.addEventListener('click', async () => {
+  await window.api.resetOverlayPosition();
+});
 
 els.saveBtn.addEventListener('click', async () => {
   await window.api.saveSettings(collectFormSettings());

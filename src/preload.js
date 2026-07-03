@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('api', {
   startMonitoring: () => ipcRenderer.invoke('start-monitoring'),
   stopMonitoring: () => ipcRenderer.invoke('stop-monitoring'),
   previewHighUsage: () => ipcRenderer.invoke('preview-high-usage'),
+  setOverlayMoveMode: (enabled) => ipcRenderer.invoke('set-overlay-move-mode', enabled),
+  resetOverlayPosition: () => ipcRenderer.invoke('reset-overlay-position'),
   onStatusUpdate: (callback) => ipcRenderer.on('status-update', (_e, data) => callback(data)),
   onLog: (callback) => ipcRenderer.on('log-line', (_e, line) => callback(line)),
   onSoundAlert: (callback) => ipcRenderer.on('sound-alert', (_e, data) => callback(data)),
@@ -22,4 +24,6 @@ contextBridge.exposeInMainWorld('statsOverlayApi', {
   // Tells main process the real rendered height so the window can grow/shrink to fit
   // every row exactly - fixes the last server row getting clipped off the bottom.
   reportSize: (height) => ipcRenderer.send('stats-overlay-resize', height),
+  // Toggles the drag-to-reposition CSS state when "Move Overlay" mode is turned on/off.
+  onMovableChanged: (callback) => ipcRenderer.on('overlay-movable-changed', (_e, enabled) => callback(enabled)),
 });

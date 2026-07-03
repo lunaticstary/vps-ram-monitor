@@ -155,3 +155,32 @@ body.compact input, body.compact select, body.compact textarea { padding: 6px 8p
 body.compact button { padding: 7px 10px; font-size: 12px; margin-top: 6px; margin-right: 6px; }
 body.compact .log { height: 90px; }
 body.compact .live-pill { padding: 3px 8px; font-size: 10px; }
+
+/* ---- Overlay color + move controls ---- */
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.color-row .inline-label {
+  margin: 0;
+  font-size: 12px;
+  color: #cbd0da;
+}
+.color-row input[type=color] {
+  width: 44px;
+  height: 30px;
+  padding: 2px;
+  cursor: pointer;
+}
+.move-overlay-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.move-overlay-row button.active {
+  background: #4c7cff;
+  color: white;
+}
+body.compact .color-row { margin-top: 8px; }

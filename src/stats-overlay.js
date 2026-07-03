@@ -22,6 +22,18 @@ function pillHtml(label, percent) {
   `;
 }
 
+// Converts a "#rrggbb" hex color into an "rgba(r, g, b, alpha)" string for the row background.
+function hexToRgba(hex, alpha) {
+  if (typeof hex !== 'string') return null;
+  const match = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim());
+  if (!match) return null;
+  const int = parseInt(match[1], 16);
+  const r = (int >> 16) & 255;
+  const g = (int >> 8) & 255;
+  const b = int & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 // Measures the actual rendered content height and tells main to resize the window to
 // match exactly, so the last row never gets clipped regardless of how many servers or
 // how long their names are.
@@ -37,6 +49,10 @@ function reportRealSize() {
 // No warning text, no popups, no sounds here - purely a live color-coded readout per server.
 window.statsOverlayApi.onData((data) => {
   document.body.classList.toggle('compact', !!data.compact);
+
+  const rgba = hexToRgba(data.bgColor, 0.55);
+  if (rgba) document.documentElement.style.setProperty('--overlay-bg', rgba);
+
   const servers = data.servers || [];
 
   if (servers.length === 0) {
@@ -67,6 +83,12 @@ window.statsOverlayApi.onData((data) => {
     .join('');
 
   reportRealSize();
+});
+
+// Toggled by the dashboard's "Move Overlay" button - lets the user drag this widget
+// anywhere on screen via the CSS drag region defined in stats-overlay.html.
+window.statsOverlayApi.onMovableChanged((enabled) => {
+  document.body.classList.toggle('draggable', !!enabled);
 });
 
 window.addEventListener('resize', reportRealSize);

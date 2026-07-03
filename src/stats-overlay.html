@@ -19,7 +19,7 @@
       padding: 8px;
     }
     .server-row {
-      background: rgba(20, 22, 30, 0.35);
+      background: var(--overlay-bg, rgba(20, 22, 30, 0.55));
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 10px;
       padding: 5px 8px;
@@ -68,6 +68,21 @@
     body.compact .pill .value { font-size: 11px; }
     body.compact #root { gap: 4px; padding: 6px; }
     body.compact .server-row { padding: 3px 6px; }
+
+    /* "Move Overlay" mode: the whole widget becomes a native drag handle, with a dashed
+       highlight so it's obvious it can be dragged right now. */
+    body.draggable {
+      cursor: move;
+    }
+    body.draggable #root {
+      outline: 2px dashed rgba(255, 255, 255, 0.55);
+      outline-offset: 2px;
+      border-radius: 12px;
+    }
+    body.draggable .server-row,
+    body.draggable #root {
+      -webkit-app-region: drag;
+    }
   </style>
 </head>
 <body>
