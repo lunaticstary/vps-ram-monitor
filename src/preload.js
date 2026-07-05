@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('api', {
   testServerConnection: (server) => ipcRenderer.invoke('test-server-connection', server),
   startMonitoring: () => ipcRenderer.invoke('start-monitoring'),
   stopMonitoring: () => ipcRenderer.invoke('stop-monitoring'),
-  previewHighUsage: () => ipcRenderer.invoke('preview-high-usage'),
+  previewScenario: (scenario) => ipcRenderer.invoke('preview-scenario', scenario),
   setOverlayMoveMode: (enabled) => ipcRenderer.invoke('set-overlay-move-mode', enabled),
   resetOverlayPosition: () => ipcRenderer.invoke('reset-overlay-position'),
   onStatusUpdate: (callback) => ipcRenderer.on('status-update', (_e, data) => callback(data)),

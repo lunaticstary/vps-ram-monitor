@@ -28,7 +28,7 @@ const els = {
   resetOverlayPosBtn: document.getElementById('resetOverlayPosBtn'),
 
   saveBtn: document.getElementById('saveBtn'),
-  testAlertBtn: document.getElementById('testAlertBtn'),
+
   startBtn: document.getElementById('startBtn'),
   stopBtn: document.getElementById('stopBtn'),
   statusDot: document.getElementById('statusDot'),
@@ -213,6 +213,27 @@ function applyDisplayPrefs() {
 els.showLiveUsageBar.addEventListener('change', applyDisplayPrefs);
 els.compactLayout.addEventListener('change', applyDisplayPrefs);
 
+// ---- Test message buttons ----
+// Each button previews a different scenario on the overlay + sound system.
+const testButtons = [
+  { selector: '.test-red',      scenario: 'critical' },
+  { selector: '.test-yellow',   scenario: 'warning' },
+  { selector: '.test-green',    scenario: 'healthy' },
+  { selector: '.test-offline',  scenario: 'offline' },
+  { selector: '.test-mixed',    scenario: 'mixed' },
+  { selector: '.test-ram',      scenario: 'ram-only' },
+  { selector: '.test-cpu',      scenario: 'cpu-only' },
+  { selector: '.test-disk',     scenario: 'disk-only' },
+];
+testButtons.forEach(({ selector, scenario }) => {
+  const btn = document.querySelector(selector);
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    // User click satisfies Chromium's autoplay policy so audio/speech works reliably.
+    window.api.previewScenario(scenario);
+  });
+});
+
 els.overlayBgColor.addEventListener('input', async () => {
   await window.api.saveSettings(collectFormSettings());
 });
@@ -232,13 +253,6 @@ els.resetOverlayPosBtn.addEventListener('click', async () => {
 els.saveBtn.addEventListener('click', async () => {
   await window.api.saveSettings(collectFormSettings());
   applyDisplayPrefs();
-});
-
-// Previews the overlay turning red AND (if sound alerts are on) the beep + spoken warning.
-els.testAlertBtn.addEventListener('click', () => {
-  // A user click right before this is exactly the gesture Chromium's autoplay
-  // policy wants, so audio/speech reliably works when triggered from here.
-  window.api.previewHighUsage();
 });
 
 els.startBtn.addEventListener('click', async () => {

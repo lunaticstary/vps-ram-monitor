@@ -70,7 +70,22 @@
         Launch app on system startup
       </label>
       <button id="saveBtn">Save Settings</button>
-      <button id="testAlertBtn" class="warn">🧪 Test Alert (color + sound)</button>
+      <button id="saveBtn">Save Settings</button>
+    </div>
+
+    <div class="card">
+      <h2>🧪 Test Messages</h2>
+      <p class="hint">Preview how the overlay and alerts look/sound in different scenarios. Each test shows the overlay for 6 seconds.</p>
+      <div class="test-grid">
+        <button class="test-btn test-red">🔴 Critical<br><small>All metrics 95%+</small></button>
+        <button class="test-btn test-yellow">🟡 Warning<br><small>Moderate 60-80%</small></button>
+        <button class="test-btn test-green">🟢 Healthy<br><small>All normal 10-30%</small></button>
+        <button class="test-btn test-offline">⛔ Offline<br><small>Node unreachable</small></button>
+        <button class="test-btn test-mixed">🔀 Mixed<br><small>1 OK, 1 critical, 1 down</small></button>
+        <button class="test-btn test-ram">💾 RAM Only<br><small>RAM 99%, others OK</small></button>
+        <button class="test-btn test-cpu">⚡ CPU Only<br><small>CPU 98%, others OK</small></button>
+        <button class="test-btn test-disk">💿 Disk Only<br><small>Disk 97%, others OK</small></button>
+      </div>
     </div>
 
     <div class="card">

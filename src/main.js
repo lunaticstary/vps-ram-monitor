@@ -547,45 +547,86 @@ ipcMain.handle('stop-monitoring', () => {
 
 // Preview button: shows the overlay turning red for a fake server, and (if enabled) plays
 // the beep + spoken warning too, so the user can test the full experience on demand.
-ipcMain.handle('preview-high-usage', () => {
+// Each scenario produces different fake data so the user can see exactly how the
+// overlay looks (colors) and sounds (beeps + speech) in every situation.
+ipcMain.handle('preview-scenario', (_e, scenario) => {
   const wasVisible = !!(statsOverlayWindow && !statsOverlayWindow.isDestroyed() && statsOverlayWindow.isVisible());
-  const fakeServers = (store.get('servers') || []).length
-    ? (store.get('servers') || []).map((s) => ({
-        id: s.id,
-        name: serverLabel(s),
-        connected: true,
-        ramPercent: 99,
-        cpuPercent: 97,
-        diskPercent: 91,
-      }))
-    : [{ id: 'preview', name: 'Preview Server', connected: true, ramPercent: 99, cpuPercent: 97, diskPercent: 91 }];
+  const showRam = store.get('showRam') !== false;
+  const showCpu = store.get('showCpu') !== false;
+  const showDisk = store.get('showDisk') !== false;
+
+  const savedServers = store.get('servers') || [];
+  const useRealNames = savedServers.length > 0;
+  const realNames = useRealNames ? savedServers.map((s) => serverLabel(s)) : [];
+
+  function srv(i, overrides) {
+    const base = { id: `preview-${i}`, name: useRealNames ? realNames[i] || `Server ${i + 1}` : `Server ${i + 1}`, connected: true };
+    return { ...base, ...overrides };
+  }
+
+  let fakeServers = [];
+  let alerts = [];
+
+  switch (scenario) {
+    case 'critical':
+      fakeServers = [srv(0, { ramPercent: 99, cpuPercent: 97, diskPercent: 95 })];
+      alerts = [{ name: fakeServers[0].name, ramHigh: showRam, cpuHigh: showCpu, diskHigh: showDisk, ramPercent: 99, cpuPercent: 97, diskPercent: 95 }];
+      break;
+    case 'warning':
+      fakeServers = [srv(0, { ramPercent: 72, cpuPercent: 65, diskPercent: 68 })];
+      // Yellow zone (60-84%) — no audio alert, just visual color change
+      alerts = [];
+      break;
+    case 'healthy':
+      fakeServers = [srv(0, { ramPercent: 15, cpuPercent: 10, diskPercent: 22 })];
+      alerts = [];
+      break;
+    case 'offline':
+      fakeServers = [srv(0, { connected: false, error: 'Connection timed out (22s)' })];
+      alerts = [];
+      break;
+    case 'mixed':
+      fakeServers = [
+        srv(0, { ramPercent: 18, cpuPercent: 12, diskPercent: 30 }),
+        srv(1, { ramPercent: 99, cpuPercent: 96, diskPercent: 88 }),
+        srv(2, { connected: false, error: 'ECONNREFUSED' }),
+      ];
+      alerts = [{ name: fakeServers[1].name, ramHigh: showRam, cpuHigh: showCpu, diskHigh: showDisk, ramPercent: 99, cpuPercent: 96, diskPercent: 88 }];
+      break;
+    case 'ram-only':
+      fakeServers = [srv(0, { ramPercent: 99, cpuPercent: 15, diskPercent: 22 })];
+      alerts = [{ name: fakeServers[0].name, ramHigh: showRam, cpuHigh: false, diskHigh: false, ramPercent: 99, cpuPercent: 15, diskPercent: 22 }];
+      break;
+    case 'cpu-only':
+      fakeServers = [srv(0, { ramPercent: 20, cpuPercent: 98, diskPercent: 30 })];
+      alerts = [{ name: fakeServers[0].name, ramHigh: false, cpuHigh: showCpu, diskHigh: false, ramPercent: 20, cpuPercent: 98, diskPercent: 30 }];
+      break;
+    case 'disk-only':
+      fakeServers = [srv(0, { ramPercent: 25, cpuPercent: 18, diskPercent: 97 })];
+      alerts = [{ name: fakeServers[0].name, ramHigh: false, cpuHigh: false, diskHigh: showDisk, ramPercent: 25, cpuPercent: 18, diskPercent: 97 }];
+      break;
+    default:
+      fakeServers = [srv(0, { ramPercent: 99, cpuPercent: 97, diskPercent: 91 })];
+      alerts = [{ name: fakeServers[0].name, ramHigh: showRam, cpuHigh: showCpu, diskHigh: showDisk, ramPercent: 99, cpuPercent: 97, diskPercent: 91 }];
+  }
 
   showStatsOverlay();
   updateStatsOverlay(fakeServers);
 
-  // Match real behavior: a hidden metric never gets announced, even in the preview.
-  if (store.get('soundAlertsEnabled')) {
+  // Only fire sound alerts when there are actual high-usage alerts AND sound is enabled.
+  if (alerts.length > 0 && store.get('soundAlertsEnabled')) {
     lastSoundAlertAt = Date.now();
-    sendSoundAlert({
-      alerts: fakeServers.map((s) => ({
-        name: s.name,
-        ramHigh: store.get('showRam'),
-        cpuHigh: store.get('showCpu'),
-        diskHigh: store.get('showDisk'),
-        ramPercent: s.ramPercent,
-        cpuPercent: s.cpuPercent,
-        diskPercent: s.diskPercent,
-      })),
-    });
+    sendSoundAlert({ alerts });
   }
 
+  // Restore real data after 6 seconds.
   setTimeout(() => {
     if (isMonitoring) {
       pollOnce();
     } else if (!wasVisible) {
       hideStatsOverlay();
     }
-  }, 5000);
+  }, 6000);
   return { ok: true };
 });
 
