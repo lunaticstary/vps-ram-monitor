@@ -90,3 +90,39 @@
   <script src="stats-overlay.js"></script>
 </body>
 </html>
+
+    /* ---- Offline / down server styling ---- */
+    .server-row.server-down {
+      background: rgba(239, 68, 68, 0.18);
+      border-color: rgba(239, 68, 68, 0.7);
+    }
+    .server-row.server-down .server-name {
+      color: rgba(255, 200, 200, 0.95);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .down-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #ef4444;
+      flex-shrink: 0;
+      animation: down-pulse 1s ease-in-out infinite;
+    }
+    @keyframes down-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .down-banner {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      color: #ffb0b0;
+      margin-top: 2px;
+      line-height: 1.3;
+      white-space: normal;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }

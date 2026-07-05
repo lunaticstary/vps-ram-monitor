@@ -67,15 +67,25 @@ window.statsOverlayApi.onData((data) => {
 
   root.innerHTML = servers
     .map((s) => {
+      // Offline nodes get a loud, unmistakable "DOWN" treatment instead of
+      // quietly appending "(offline)" to the name and showing blank pills.
+      if (s.connected === false) {
+        return `
+          <div class="server-row server-down">
+            <div class="server-name">
+              <span class="down-dot"></span>${s.name}
+            </div>
+            <div class="down-banner">⚠ OFFLINE — ${s.error || 'connection error'}</div>
+          </div>
+        `;
+      }
       const pills = [];
       if (data.showCpu !== false) pills.push(pillHtml('CPU', s.cpuPercent));
       if (data.showRam !== false) pills.push(pillHtml('RAM', s.ramPercent));
       if (data.showDisk !== false) pills.push(pillHtml('DISK', s.diskPercent));
-      const nameClass = s.connected === false ? 'server-name offline' : 'server-name';
-      const nameText = s.connected === false ? `${s.name} (offline)` : s.name;
       return `
         <div class="server-row">
-          <div class="${nameClass}" title="${nameText}">${nameText}</div>
+          <div class="server-name">${s.name}</div>
           <div class="pills">${pills.join('')}</div>
         </div>
       `;

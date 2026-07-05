@@ -270,8 +270,11 @@ window.api.onStatusUpdate((status) => {
         .map((s) => {
           if (s.connected === false) {
             return `
-              <div class="live-status-row">
-                <div class="live-status-name offline">${s.name} — connection error</div>
+              <div class="live-status-row live-status-down">
+                <div class="live-status-name offline">
+                  <span class="down-dot-dashboard"></span>${s.name} — OFFLINE
+                </div>
+                <div class="live-status-error">${s.error || 'connection error'}</div>
               </div>
             `;
           }
